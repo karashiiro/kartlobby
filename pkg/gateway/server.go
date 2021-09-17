@@ -61,7 +61,7 @@ func (gs *GatewayServer) Close() {
 
 // Run initializes the internal UDP server and blocks, looping while
 // handling UDP messages.
-func (gs *GatewayServer) Run() {
+func (gs *GatewayServer) Run() error {
 	server, err := net.ListenUDP("udp", &net.UDPAddr{Port: gs.port})
 	if err != nil {
 		log.Fatalln(err)
@@ -75,7 +75,7 @@ func (gs *GatewayServer) Run() {
 		data := make([]byte, 1024)
 		_, addr, err := gs.server.ReadFrom(data)
 		if err != nil {
-			log.Fatalln(err)
+			return err
 		}
 
 		conn := network.NewUDPConnection(gs.server, addr)
