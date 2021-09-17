@@ -22,6 +22,7 @@ type UDPServer interface {
 type GameInstance struct {
 	client *client.Client
 	conn   network.Connection
+	hijack *types.HijackedResponse
 }
 
 func NewInstance(server *net.UDPConn) (*GameInstance, error) {
@@ -52,11 +53,22 @@ func NewInstance(server *net.UDPConn) (*GameInstance, error) {
 		return nil, err
 	}
 
+	hijack, err := client.ContainerAttach(ctx, resp.ID, types.ContainerAttachOptions{})
+	if err != nil {
+		return nil, err
+	}
+
 	inst := &GameInstance{
 		client: client,
+		conn:   network.NewUDPConnection(server, hijack.Conn.RemoteAddr()),
+		hijack: &hijack,
 	}
 
 	return inst, nil
+}
+
+func (gi *GameInstance) Close() {
+	gi.hijack.Close()
 }
 
 // AskInfo sends a PT_ASKINFO request to the game server behind this instance, returning the resulting
