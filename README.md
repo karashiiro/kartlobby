@@ -1,6 +1,11 @@
 # kartlobby
 (WIP) A lobby server for [SRB2Kart](https://github.com/STJr/Kart-Public).
 
+## Usage
+Run `pull_image.sh` to pull the latest Docker image. If the game ever updates, run it again to update the image to the latest version.
+
+TODO: Maintain own Docker image rather than relying on [BrianAllred/srb2kart](https://github.com/BrianAllred/srb2kart).
+
 ## Acknowledgements
 repo|for what
 --|--
