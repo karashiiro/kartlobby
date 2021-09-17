@@ -76,9 +76,9 @@ func (gs *GatewayServer) Run() {
 		// Check if we have any callbacks registered and run them if so.
 		if cb, ok := gs.callbacks[addr.String()]; ok {
 			go cb(conn, data)
+		} else {
+			go gs.handlePacket(conn, data)
 		}
-
-		go gs.handlePacket(conn, data)
 	}
 }
 
