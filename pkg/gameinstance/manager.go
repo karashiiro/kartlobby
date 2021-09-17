@@ -3,6 +3,9 @@ package gameinstance
 import (
 	"context"
 	"errors"
+	"math"
+	"net"
+	"time"
 
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 )
@@ -45,8 +48,53 @@ func (m *GameInstanceManager) AskInfo(askInfo *gamenet.AskInfoPak, server UDPSer
 // in order to balance players across all instances. In the event that this isn't possible, a
 // new instance will be created. If we are already tracking our maximum number of instances,
 // an error is returned.
-func (m *GameInstanceManager) GetOrCreateOpenInstance() (*GameInstance, error) {
-	return nil, nil
+func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server UDPServer) (*GameInstance, error) {
+	var instancePlayers int = math.MaxInt
+	var instance *GameInstance
+
+	for _, inst := range m.instances {
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+
+		_, pi, err := inst.AskInfo(&gamenet.AskInfoPak{}, server, ctx)
+		if err != nil {
+			// We should do something about this, maybe?
+			continue
+		}
+
+		// Check the number of players
+		instPlayers := 0
+		for i := 0; i < len(pi.Players); i++ {
+			if pi.Players[i].Node == 255 {
+				break
+			}
+
+			instPlayers++
+		}
+
+		// We want the instance with the fewest players
+		if instance == nil || instPlayers < instancePlayers {
+			instance = inst
+			instancePlayers = instPlayers
+		}
+	}
+
+	if instance == nil {
+		// Create a new instance
+		newInstance, err := NewInstance(conn)
+		if err != nil {
+			return nil, err
+		}
+
+		// Register the instance
+		m.instances[newInstance.conn.Addr().String()] = newInstance
+
+		// Assign it to return it
+		instance = newInstance
+	}
+
+	return instance, nil
 }
 
 // GetInstance returns the instance with the specified address, or an error if that instance
