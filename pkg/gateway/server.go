@@ -59,9 +59,26 @@ func (gs *GatewayServer) Run() {
 		// d_clisrv.h notes 64kB packets under doomdata_t, but those
 		// are probably junk numbers.
 		data := make([]byte, 1024)
-		_, _, err := gs.server.ReadFrom(data)
+		_, addr, err := gs.server.ReadFrom(data)
 		if err != nil {
 			log.Fatalln(err)
 		}
+
+		go gs.handlePacket(network.NewUDPConnection(gs.server, addr), data)
+	}
+}
+
+func (gs *GatewayServer) handlePacket(conn network.Connection, data []byte) {
+	header := gamenet.PacketHeader{}
+	gamenet.ReadPacket(data, &header)
+
+	log.Printf("Got packet from %s with type %d", conn.Addr().String(), header.PacketType)
+
+	switch header.PacketType {
+	case gamenet.PT_ASKINFO:
+		askInfo := gamenet.AskInfoPak{}
+		gamenet.ReadPacket(data, &askInfo)
+	default:
+		log.Println("Got unknown packet, forwarding")
 	}
 }
