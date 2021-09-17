@@ -5,20 +5,32 @@ import (
 	"net"
 
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
+	"github.com/karashiiro/kartlobby/pkg/motd"
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
 
 type GatewayServer struct {
-	port      int
-	server    *net.UDPConn
-	clients   map[string]*clientInfo
-	broadcast *network.BroadcastConnection
+	port       int
+	maxClients int
+	server     *net.UDPConn
+	clients    map[string]*clientInfo
+	broadcast  *network.BroadcastConnection
+	motd       *motd.MotdProvider
 }
 
-func NewServer(port int) *GatewayServer {
+type GatewayOptions struct {
+	Port       int
+	MaxClients int
+	Motd       string
+}
+
+func NewServer(opts *GatewayOptions) *GatewayServer {
 	gs := GatewayServer{
-		port:    port,
-		clients: make(map[string]*clientInfo),
+		port:       opts.Port,
+		maxClients: opts.MaxClients,
+		clients:    make(map[string]*clientInfo),
+		broadcast:  network.NewBroadcastConnection(opts.MaxClients),
+		motd:       motd.New(opts.Motd),
 	}
 	return &gs
 }
