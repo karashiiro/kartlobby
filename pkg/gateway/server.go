@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"log"
 	"net"
 
@@ -14,6 +15,7 @@ type GatewayServer struct {
 	maxClients int
 	server     *net.UDPConn
 	clients    map[string]*clientInfo
+	callbacks  map[string]func(network.Connection, []byte)
 	broadcast  *network.BroadcastConnection
 	motd       *motd.MotdProvider
 }
@@ -29,6 +31,7 @@ func NewServer(opts *GatewayOptions) *GatewayServer {
 		port:       opts.Port,
 		maxClients: opts.MaxClients,
 		clients:    make(map[string]*clientInfo),
+		callbacks:  make(map[string]func(network.Connection, []byte)),
 		broadcast:  network.NewBroadcastConnection(opts.MaxClients),
 		motd:       motd.New(opts.Motd),
 	}
@@ -64,8 +67,39 @@ func (gs *GatewayServer) Run() {
 			log.Fatalln(err)
 		}
 
-		go gs.handlePacket(network.NewUDPConnection(gs.server, addr), data)
+		conn := network.NewUDPConnection(gs.server, addr)
+
+		// Check if we have any callbacks registered and run them if so.
+		if cb, ok := gs.callbacks[addr.String()]; ok {
+			go cb(conn, data)
+		}
+
+		go gs.handlePacket(conn, data)
 	}
+}
+
+// WaitForMessage waits for a message with the provided opcode from the specified address.
+// This function should always be called with a timeout context in order to avoid hanging.
+func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, result chan []byte, ctx context.Context) {
+	got := make(chan bool, 1)
+
+	// Register a callback for the message we want
+	gs.callbacks[addr] = func(conn network.Connection, data []byte) {
+		header := gamenet.PacketHeader{}
+		gamenet.ReadPacket(data, &header)
+
+		log.Printf("Got packet from %s with type %d", conn.Addr().String(), header.PacketType)
+
+		if header.PacketType == message {
+			// Unregister this function once we get the message
+			delete(gs.callbacks, addr)
+
+			result <- data
+			got <- true
+		}
+	}
+
+	<-got
 }
 
 func (gs *GatewayServer) handlePacket(conn network.Connection, data []byte) {

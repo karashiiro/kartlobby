@@ -1,6 +1,12 @@
 package gameinstance
 
-import "errors"
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/karashiiro/kartlobby/pkg/gamenet"
+)
 
 type GameInstanceManager struct {
 	numInstances int
@@ -16,6 +22,24 @@ func NewManager(maxInstances int) *GameInstanceManager {
 	}
 
 	return &m
+}
+
+func (m *GameInstanceManager) AskInfo(server UDPServer) (*gamenet.ServerInfoPak, *gamenet.PlayerInfoPak, error) {
+	if len(m.instances) == 0 {
+		return nil, nil, errors.New("no instances are active")
+	}
+
+	var instance *GameInstance
+	for _, inst := range m.instances {
+		instance = inst
+		break
+	}
+
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	return instance.AskInfo(server, ctx)
 }
 
 func (m *GameInstanceManager) GetOrCreateOpenInstance() (*GameInstance, error) {
