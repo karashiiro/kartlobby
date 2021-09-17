@@ -157,6 +157,15 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, data []byte) {
 			return
 		}
 	default:
-		log.Println("Got unknown packet, forwarding")
+		if client, ok := gs.clients[conn.Addr().String()]; ok {
+			log.Println("Got unknown packet, forwarding...")
+			err := gamenet.SendPacket(client.gameConn, data)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		} else {
+			log.Println("Got unknown packet, can't do anything")
+		}
 	}
 }
