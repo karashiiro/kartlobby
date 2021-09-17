@@ -17,7 +17,7 @@ type GatewayServer struct {
 	clients    map[string]*clientInfo
 	callbacks  map[string]func(network.Connection, []byte)
 	broadcast  *network.BroadcastConnection
-	motd       *motd.MotdProvider
+	motd       motd.Motd
 }
 
 type GatewayOptions struct {
