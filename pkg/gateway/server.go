@@ -145,6 +145,16 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, data []byte) {
 			return
 		}
 
+		// Overwrite the server name with our motd
+		motd := []byte(gs.motd.GetMotd())
+		for i := 0; i < len(serverInfo.ServerName); i++ {
+			if i >= len(motd) {
+				serverInfo.ServerName[i] = 0
+			} else {
+				serverInfo.ServerName[i] = motd[i]
+			}
+		}
+
 		// Send responses
 		err = gamenet.SendPacket(conn, serverInfo)
 		if err != nil {
