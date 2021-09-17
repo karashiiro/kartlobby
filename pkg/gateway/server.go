@@ -38,6 +38,8 @@ func NewServer(opts *GatewayOptions) *GatewayServer {
 	return &gs
 }
 
+// Close shuts down the server, sending a PT_SERVERSHUTDOWN to all
+// connected clients.
 func (gs *GatewayServer) Close() {
 	if gs.server == nil {
 		return
@@ -50,6 +52,8 @@ func (gs *GatewayServer) Close() {
 	gs.server.Close()
 }
 
+// Run initializes the internal UDP server and blocks, looping while
+// handling UDP messages.
 func (gs *GatewayServer) Run() {
 	server, err := net.ListenUDP("udp", &net.UDPAddr{Port: gs.port})
 	if err != nil {
