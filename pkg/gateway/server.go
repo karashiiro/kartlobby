@@ -80,7 +80,7 @@ func (gs *GatewayServer) Run() {
 
 // WaitForMessage waits for a message with the provided opcode from the specified address.
 // This function should always be called with a timeout context in order to avoid hanging.
-func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, result chan []byte, ctx context.Context) {
+func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, result chan []byte, err chan error, ctx context.Context) {
 	got := make(chan bool, 1)
 
 	// Register a callback for the message we want
@@ -95,6 +95,11 @@ func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, res
 			delete(gs.callbacks, addr)
 
 			result <- data
+			got <- true
+		}
+
+		if _, ok := <-ctx.Done(); ok {
+			err <- ctx.Err()
 			got <- true
 		}
 	}
