@@ -1,6 +1,8 @@
 package gateway
 
-import "github.com/karashiiro/kartlobby/pkg/network"
+import (
+	"github.com/karashiiro/kartlobby/pkg/network"
+)
 
 type clientInfo struct {
 	clientConn network.Connection

@@ -87,7 +87,7 @@ func (gs *GatewayServer) Run() error {
 		if cb, ok := gs.callbacks[addr.String()]; ok {
 			go cb(conn, data)
 		} else {
-			go gs.handlePacket(conn, data)
+			go gs.handlePacket(conn, addr.(*net.UDPAddr), data)
 		}
 	}
 }
@@ -124,7 +124,7 @@ func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, res
 	<-got
 }
 
-func (gs *GatewayServer) handlePacket(conn network.Connection, data []byte) {
+func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr, data []byte) {
 	header := gamenet.PacketHeader{}
 	gamenet.ReadPacket(data, &header)
 
@@ -179,6 +179,9 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, data []byte) {
 			}
 		} else {
 			log.Println("Got unknown packet, can't do anything")
+			// For future reference: We need to make sure that the server reads the sender IP field
+			// as the client's, and not ours. Because of this, we need to create the connections in
+			// the client info with *new* UDP servers created with DialUDP.
 		}
 	}
 }
