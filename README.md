@@ -1,5 +1,5 @@
 # kartlobby
-A lobby server for [SRB2Kart](https://github.com/STJr/Kart-Public).
+(WIP) A lobby server for [SRB2Kart](https://github.com/STJr/Kart-Public).
 
 ## Acknowledgements
 repo|for what
