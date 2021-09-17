@@ -99,6 +99,9 @@ func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, res
 		}
 
 		if _, ok := <-ctx.Done(); ok {
+			// Unregister this function if we didn't get a message within the context bounds
+			delete(gs.callbacks, addr)
+
 			err <- ctx.Err()
 			got <- true
 		}
