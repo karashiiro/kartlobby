@@ -20,7 +20,7 @@ type GameInstance struct {
 // AskInfo sends a PT_ASKINFO request to the game server behind this instance, returning the resulting
 // PT_SERVERINFO and PT_PLAYERINFO packets. A timeout context should always be provided in order to
 // prevent an application hang in the event that the server doesn't respond.
-func (gi *GameInstance) AskInfo(server UDPServer, ctx context.Context) (*gamenet.ServerInfoPak, *gamenet.PlayerInfoPak, error) {
+func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, ctx context.Context) (*gamenet.ServerInfoPak, *gamenet.PlayerInfoPak, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -36,9 +36,8 @@ func (gi *GameInstance) AskInfo(server UDPServer, ctx context.Context) (*gamenet
 	go server.WaitForMessage(gamenet.PT_SERVERINFO, addr, serverInfoChan, siErrChan, ctx)
 	go server.WaitForMessage(gamenet.PT_PLAYERINFO, addr, playerInfoChan, piErrChan, ctx)
 
-	// Send the PT_ASKINFO request
-	askInfo := gamenet.AskInfoPak{}
-	err := gamenet.SendPacket(gi.conn, &askInfo)
+	// Forward the PT_ASKINFO request from the caller
+	err := gamenet.SendPacket(gi.conn, askInfo)
 	if err != nil {
 		return nil, nil, err
 	}

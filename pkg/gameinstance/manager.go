@@ -26,7 +26,7 @@ func NewManager(maxInstances int) *GameInstanceManager {
 // AskInfo sends a PT_ASKINFO request to the game server behind the first instance we're tracking,
 // returning the resulting PT_SERVERINFO and PT_PLAYERINFO packets. A timeout context should
 // always be provided in order to prevent an application hang in the event that the server doesn't respond.
-func (m *GameInstanceManager) AskInfo(server UDPServer, ctx context.Context) (*gamenet.ServerInfoPak, *gamenet.PlayerInfoPak, error) {
+func (m *GameInstanceManager) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, ctx context.Context) (*gamenet.ServerInfoPak, *gamenet.PlayerInfoPak, error) {
 	// Get first instance
 	var instance *GameInstance
 	for _, inst := range m.instances {
@@ -38,7 +38,7 @@ func (m *GameInstanceManager) AskInfo(server UDPServer, ctx context.Context) (*g
 		return nil, nil, errors.New("no instances are active")
 	}
 
-	return instance.AskInfo(server, ctx)
+	return instance.AskInfo(askInfo, server, ctx)
 }
 
 // GetOrCreateOpenInstance gets an open game instance, preferring instances with fewer players
