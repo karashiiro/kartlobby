@@ -3,7 +3,6 @@ package gameinstance
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 )
@@ -24,20 +23,20 @@ func NewManager(maxInstances int) *GameInstanceManager {
 	return &m
 }
 
-func (m *GameInstanceManager) AskInfo(server UDPServer) (*gamenet.ServerInfoPak, *gamenet.PlayerInfoPak, error) {
-	if len(m.instances) == 0 {
-		return nil, nil, errors.New("no instances are active")
-	}
-
+// AskInfo sends a PT_ASKINFO request to the game server behind the first instance we're tracking,
+// returning the resulting PT_SERVERINFO and PT_PLAYERINFO packets. A timeout context should
+// always be provided in order to prevent an application hang in the event that the server doesn't respond.
+func (m *GameInstanceManager) AskInfo(server UDPServer, ctx context.Context) (*gamenet.ServerInfoPak, *gamenet.PlayerInfoPak, error) {
+	// Get first instance
 	var instance *GameInstance
 	for _, inst := range m.instances {
 		instance = inst
 		break
 	}
 
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
+	if instance == nil {
+		return nil, nil, errors.New("no instances are active")
+	}
 
 	return instance.AskInfo(server, ctx)
 }
