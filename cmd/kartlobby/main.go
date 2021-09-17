@@ -30,6 +30,8 @@ func main() {
 		Port: 5080,
 	})
 
+	// TODO: make this not a single point of failure
+	// that kicks everyone when a panic occurs
 	errChan := make(chan error, 1)
 	go runApplicationLoop(gs.Run, errChan)
 	go runApplicationLoop(r.Run, errChan)
