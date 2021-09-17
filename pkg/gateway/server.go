@@ -75,7 +75,8 @@ func (gs *GatewayServer) Run() error {
 		data := make([]byte, 1024)
 		_, addr, err := gs.server.ReadFrom(data)
 		if err != nil {
-			return err
+			log.Println(err)
+			continue
 		}
 
 		conn := network.NewUDPConnection(gs.server, addr)
