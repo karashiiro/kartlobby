@@ -2,6 +2,7 @@ package gameinstance
 
 import (
 	"context"
+	"fmt"
 	"net"
 
 	"github.com/docker/docker/api/types"
@@ -30,9 +31,16 @@ func NewInstance(server *net.UDPConn) (*GameInstance, error) {
 		return nil, err
 	}
 
+	port, err := network.GetFreePort()
+	if err != nil {
+		return nil, err
+	}
+
+	exposedPort := nat.Port(fmt.Sprint(port) + ":5029/udp")
+
 	resp, err := client.ContainerCreate(ctx, &container.Config{
 		ExposedPorts: nat.PortSet{
-			"5029:5031/udp": struct{}{},
+			exposedPort: struct{}{},
 		},
 		Image: "brianallred/srb2kart",
 	}, nil, nil, nil, "")
