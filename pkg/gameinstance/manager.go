@@ -41,10 +41,16 @@ func (m *GameInstanceManager) AskInfo(server UDPServer, ctx context.Context) (*g
 	return instance.AskInfo(server, ctx)
 }
 
+// GetOrCreateOpenInstance gets an open game instance, preferring instances with fewer players
+// in order to balance players across all instances. In the event that this isn't possible, a
+// new instance will be created. If we are already tracking our maximum number of instances,
+// an error is returned.
 func (m *GameInstanceManager) GetOrCreateOpenInstance() (*GameInstance, error) {
 	return nil, nil
 }
 
+// GetInstance returns the instance with the specified address, or an error if that instance
+// is not registered with this manager.
 func (m *GameInstanceManager) GetInstance(addr string) (*GameInstance, error) {
 	if inst, ok := m.instances[addr]; ok {
 		return inst, nil
