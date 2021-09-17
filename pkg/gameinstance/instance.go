@@ -13,6 +13,8 @@ import (
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
 
+const GAMEIMAGE = "brianallred/srb2kart"
+
 type UDPServer interface {
 	// WaitForMessage waits for a message with the provided opcode from the specified address.
 	// This function should always be called with a timeout context in order to avoid hanging.
@@ -33,6 +35,7 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 		return nil, err
 	}
 
+	// Get a free port
 	port, err := network.GetFreePort()
 	if err != nil {
 		return nil, err
@@ -40,20 +43,23 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 
 	exposedPort := nat.Port(fmt.Sprint(port) + ":5029/udp")
 
+	// Create the container
 	resp, err := client.ContainerCreate(ctx, &container.Config{
 		ExposedPorts: nat.PortSet{
 			exposedPort: struct{}{},
 		},
-		Image: "brianallred/srb2kart",
+		Image: GAMEIMAGE,
 	}, nil, nil, nil, "")
 	if err != nil {
 		return nil, err
 	}
 
+	// Start the container
 	if err := client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		return nil, err
 	}
 
+	// Get a connection to the process
 	hijack, err := client.ContainerAttach(ctx, resp.ID, types.ContainerAttachOptions{})
 	if err != nil {
 		return nil, err
