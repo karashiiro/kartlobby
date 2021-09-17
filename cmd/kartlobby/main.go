@@ -35,10 +35,12 @@ func main() {
 	})
 
 	r.Get("/", func() (interface{}, error) {
-		_, err := gs.CreateInstance()
+		inst, err := gs.CreateInstance()
 		if err != nil {
 			return nil, err
 		}
+
+		log.Println("Created new instance", inst.GetID())
 
 		return &message{Msg: "Success"}, nil
 	})
