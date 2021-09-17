@@ -13,13 +13,14 @@ import (
 )
 
 type GatewayServer struct {
+	Instances *gameinstance.GameInstanceManager
+	Server    *net.UDPConn
+
 	port         int
 	maxClients   int
 	maxInstances int
-	server       *net.UDPConn
 	clients      map[string]*clientInfo
 	callbacks    map[string]func(network.Connection, []byte)
-	instances    *gameinstance.GameInstanceManager
 	broadcast    *network.BroadcastConnection
 	motd         motd.Motd
 }
@@ -33,12 +34,13 @@ type GatewayOptions struct {
 
 func NewServer(opts *GatewayOptions) *GatewayServer {
 	gs := GatewayServer{
+		Instances: gameinstance.NewManager(opts.MaxInstances),
+
 		port:         opts.Port,
 		maxClients:   opts.MaxClients,
 		maxInstances: opts.MaxInstances,
 		clients:      make(map[string]*clientInfo),
 		callbacks:    make(map[string]func(network.Connection, []byte)),
-		instances:    gameinstance.NewManager(opts.MaxInstances),
 		broadcast:    network.NewBroadcastConnection(opts.MaxClients),
 		motd:         motd.New(opts.Motd),
 	}
@@ -48,7 +50,7 @@ func NewServer(opts *GatewayOptions) *GatewayServer {
 // Close shuts down the server, sending a PT_SERVERSHUTDOWN to all
 // connected clients.
 func (gs *GatewayServer) Close() {
-	if gs.server == nil {
+	if gs.Server == nil {
 		return
 	}
 
@@ -56,7 +58,7 @@ func (gs *GatewayServer) Close() {
 		PacketType: gamenet.PT_SERVERSHUTDOWN,
 	}
 	gamenet.SendPacket(gs.broadcast, &shutdown)
-	gs.server.Close()
+	gs.Server.Close()
 }
 
 // Run initializes the internal UDP server and blocks, looping while
@@ -66,20 +68,20 @@ func (gs *GatewayServer) Run() error {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	gs.server = server
+	gs.Server = server
 
 	for {
 		// PT_SERVERINFO should be the largest packet at 1024 bytes.
 		// d_clisrv.h notes 64kB packets under doomdata_t, but those
 		// are probably junk numbers.
 		data := make([]byte, 1024)
-		_, addr, err := gs.server.ReadFrom(data)
+		_, addr, err := gs.Server.ReadFrom(data)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
 
-		conn := network.NewUDPConnection(gs.server, addr)
+		conn := network.NewUDPConnection(gs.Server, addr)
 
 		// Check if we have any callbacks registered and run them if so.
 		if cb, ok := gs.callbacks[addr.String()]; ok {
@@ -88,10 +90,6 @@ func (gs *GatewayServer) Run() error {
 			go gs.handlePacket(conn, data)
 		}
 	}
-}
-
-func (gs *GatewayServer) CreateInstance() (*gameinstance.GameInstance, error) {
-	return gs.instances.CreateInstance(gs.server)
 }
 
 // WaitForMessage waits for a message with the provided opcode from the specified address.
@@ -143,7 +141,7 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, data []byte) {
 		defer cancel()
 
 		// Forward the request
-		serverInfo, playerInfo, err := gs.instances.AskInfo(&askInfo, gs, ctx)
+		serverInfo, playerInfo, err := gs.Instances.AskInfo(&askInfo, gs, ctx)
 		if err != nil {
 			log.Println(err)
 			return

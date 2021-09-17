@@ -25,7 +25,6 @@ type GameInstance struct {
 	client *client.Client
 	id     string
 	conn   network.Connection
-	hijack *types.HijackedResponse
 }
 
 func newInstance(server *net.UDPConn) (*GameInstance, error) {
@@ -59,8 +58,8 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 		return nil, err
 	}
 
-	// Get a connection to the process
-	hijack, err := client.ContainerAttach(ctx, resp.ID, types.ContainerAttachOptions{})
+	// Get the container info to retrieve the container's IP
+	cj, err := client.ContainerInspect(ctx, resp.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,15 +67,13 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 	inst := &GameInstance{
 		client: client,
 		id:     resp.ID,
-		conn:   network.NewUDPConnection(server, hijack.Conn.RemoteAddr()),
-		hijack: &hijack,
+		conn: network.NewUDPConnection(server, &net.UDPAddr{
+			IP:   net.ParseIP(cj.NetworkSettings.IPAddress),
+			Port: exposedPort.Int(),
+		}),
 	}
 
 	return inst, nil
-}
-
-func (gi *GameInstance) Close() {
-	gi.hijack.Close()
 }
 
 func (gi *GameInstance) GetID() string {

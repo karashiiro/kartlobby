@@ -1,15 +1,23 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"github.com/karashiiro/kartlobby/pkg/colortext"
+	"github.com/karashiiro/kartlobby/pkg/gamenet"
 	"github.com/karashiiro/kartlobby/pkg/gateway"
 	"github.com/karashiiro/kartlobby/pkg/rest"
 )
 
 type message struct {
 	Msg string `json:"msg"`
+}
+
+type askInfoResponse struct {
+	ServerInfo *gamenet.ServerInfoPak
+	PlayerInfo *gamenet.PlayerInfoPak
 }
 
 func runApplicationLoop(fn func() error, errChan chan error) {
@@ -34,8 +42,8 @@ func main() {
 		Port: 5030,
 	})
 
-	r.Get("/", func() (interface{}, error) {
-		inst, err := gs.CreateInstance()
+	r.Get("/new", func() (interface{}, error) {
+		inst, err := gs.Instances.CreateInstance(gs.Server)
 		if err != nil {
 			return nil, err
 		}
@@ -43,6 +51,22 @@ func main() {
 		log.Println("Created new instance", inst.GetID())
 
 		return &message{Msg: "Success"}, nil
+	})
+
+	r.Get("/askinfo", func() (interface{}, error) {
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+
+		si, pi, err := gs.Instances.AskInfo(&gamenet.AskInfoPak{}, gs, ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return &askInfoResponse{
+			ServerInfo: si,
+			PlayerInfo: pi,
+		}, nil
 	})
 
 	// TODO: make this not a single point of failure
