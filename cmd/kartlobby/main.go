@@ -17,7 +17,7 @@ func runApplicationLoop(fn func() error, errChan chan error) {
 
 func main() {
 	gs := gateway.NewServer(&gateway.GatewayOptions{
-		Port:       5079,
+		Port:       5029,
 		MaxClients: 15,
 		Motd: colortext.
 			New().
@@ -27,7 +27,7 @@ func main() {
 	defer gs.Close()
 
 	r := rest.NewServer(&rest.RESTServerOptions{
-		Port: 5080,
+		Port: 5030,
 	})
 
 	// TODO: make this not a single point of failure

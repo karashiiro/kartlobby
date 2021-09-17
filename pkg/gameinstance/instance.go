@@ -2,7 +2,12 @@ package gameinstance
 
 import (
 	"context"
+	"net"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
@@ -14,7 +19,36 @@ type UDPServer interface {
 }
 
 type GameInstance struct {
-	conn network.Connection
+	client *client.Client
+	conn   network.Connection
+}
+
+func NewInstance(server *net.UDPConn) (*GameInstance, error) {
+	ctx := context.Background()
+	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.ContainerCreate(ctx, &container.Config{
+		ExposedPorts: nat.PortSet{
+			"5029:5031/udp": struct{}{},
+		},
+		Image: "brianallred/srb2kart",
+	}, nil, nil, nil, "")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		return nil, err
+	}
+
+	inst := &GameInstance{
+		client: client,
+	}
+
+	return inst, nil
 }
 
 // AskInfo sends a PT_ASKINFO request to the game server behind this instance, returning the resulting
