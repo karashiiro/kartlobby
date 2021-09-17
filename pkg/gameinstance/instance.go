@@ -25,7 +25,7 @@ type GameInstance struct {
 	hijack *types.HijackedResponse
 }
 
-func NewInstance(server *net.UDPConn) (*GameInstance, error) {
+func newInstance(server *net.UDPConn) (*GameInstance, error) {
 	ctx := context.Background()
 	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {

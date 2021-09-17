@@ -8,6 +8,10 @@ import (
 	"github.com/karashiiro/kartlobby/pkg/rest"
 )
 
+type message struct {
+	Msg string `json:"msg"`
+}
+
 func runApplicationLoop(fn func() error, errChan chan error) {
 	err := fn()
 	if err != nil {
@@ -28,6 +32,15 @@ func main() {
 
 	r := rest.NewServer(&rest.RESTServerOptions{
 		Port: 5030,
+	})
+
+	r.Get("/", func() (interface{}, error) {
+		_, err := gs.CreateInstance()
+		if err != nil {
+			return nil, err
+		}
+
+		return &message{Msg: "Success"}, nil
 	})
 
 	// TODO: make this not a single point of failure

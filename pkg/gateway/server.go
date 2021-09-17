@@ -90,6 +90,10 @@ func (gs *GatewayServer) Run() error {
 	}
 }
 
+func (gs *GatewayServer) CreateInstance() (*gameinstance.GameInstance, error) {
+	return gs.instances.CreateInstance(gs.server)
+}
+
 // WaitForMessage waits for a message with the provided opcode from the specified address.
 // This function should always be called with a timeout context in order to avoid hanging.
 func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, result chan []byte, err chan error, ctx context.Context) {

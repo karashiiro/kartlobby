@@ -44,6 +44,20 @@ func (m *GameInstanceManager) AskInfo(askInfo *gamenet.AskInfoPak, server UDPSer
 	return instance.AskInfo(askInfo, server, ctx)
 }
 
+// CreateInstance creates a new instance, returning an error if this fails for any reason.
+func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, error) {
+	// Create a new instance
+	newInstance, err := newInstance(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Register the instance
+	m.instances[newInstance.conn.Addr().String()] = newInstance
+
+	return newInstance, nil
+}
+
 // GetOrCreateOpenInstance gets an open game instance, preferring instances with fewer players
 // in order to balance players across all instances. In the event that this isn't possible, a
 // new instance will be created. If we are already tracking our maximum number of instances,
@@ -82,13 +96,10 @@ func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server 
 
 	if instance == nil {
 		// Create a new instance
-		newInstance, err := NewInstance(conn)
+		newInstance, err := m.CreateInstance(conn)
 		if err != nil {
 			return nil, err
 		}
-
-		// Register the instance
-		m.instances[newInstance.conn.Addr().String()] = newInstance
 
 		// Assign it to return it
 		instance = newInstance
