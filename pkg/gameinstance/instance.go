@@ -3,6 +3,7 @@ package gameinstance
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 
 	"github.com/docker/docker/api/types"
@@ -96,6 +97,7 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 	addr := gi.conn.Addr().String()
 
 	// Launch goroutines waiting for the responses
+	log.Println("Launching goroutines...")
 	go server.WaitForMessage(gamenet.PT_SERVERINFO, addr, serverInfoChan, siErrChan, ctx)
 	go server.WaitForMessage(gamenet.PT_PLAYERINFO, addr, playerInfoChan, piErrChan, ctx)
 
@@ -106,10 +108,12 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 	}
 
 	// Wait for a result
+	log.Println("Waiting for results...")
 	serverInfoBytes := <-serverInfoChan
 	playerInfoBytes := <-playerInfoChan
 
 	// Error checking; context cancellations
+	log.Println("Checking errors...")
 	siErr := <-siErrChan
 	if siErr != nil {
 		return nil, nil, siErr
@@ -121,6 +125,7 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 	}
 
 	// Unmarshalling and returning results
+	log.Println("Sending replies...")
 	serverInfo := gamenet.ServerInfoPak{}
 	playerInfo := gamenet.PlayerInfoPak{}
 

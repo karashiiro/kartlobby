@@ -3,6 +3,7 @@ package gameinstance
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"net"
 	"time"
@@ -41,6 +42,7 @@ func (m *GameInstanceManager) AskInfo(askInfo *gamenet.AskInfoPak, server UDPSer
 		return nil, nil, errors.New("no instances are active")
 	}
 
+	log.Println("Got instance, requesting...")
 	return instance.AskInfo(askInfo, server, ctx)
 }
 
