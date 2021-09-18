@@ -185,20 +185,17 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr
 
 			/*var gameAddr *net.UDPAddr
 
-			fromGame, err := net.DialUDP("udp", addr, gameAddr)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
 			fromClient, err := net.DialUDP("udp", gameAddr, addr)
 			if err != nil {
 				log.Println(err)
 				return
 			}
 
-			connToGame := network.NewUDPConnection(fromClient, gameAddr)
-			connToClient := network.NewUDPConnection(fromGame, addr)*/
+			gameConn := network.NewUDPConnection(fromClient, gameAddr)
+
+			gs.clients[conn.Addr().String()] = &clientInfo{
+				gameConn: gameConn,
+			}*/
 		}
 	}
 }

@@ -5,6 +5,5 @@ import (
 )
 
 type clientInfo struct {
-	clientConn network.Connection
-	gameConn   network.Connection
+	gameConn network.Connection
 }
