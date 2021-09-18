@@ -42,15 +42,20 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 		return nil, err
 	}
 
-	exposedPort := nat.Port(fmt.Sprint(port) + ":5029/udp")
+	log.Println(port)
 
 	// Create the container
+	containerPort := nat.Port("5029/udp")
 	resp, err := client.ContainerCreate(ctx, &container.Config{
-		ExposedPorts: nat.PortSet{
-			exposedPort: struct{}{},
-		},
 		Image: GAMEIMAGE,
-	}, nil, nil, nil, "")
+	}, &container.HostConfig{
+		PortBindings: nat.PortMap{
+			// Bind 5029/udp in the container to our free port on the host
+			containerPort: []nat.PortBinding{{
+				HostPort: fmt.Sprint(port),
+			}},
+		},
+	}, nil, nil, "")
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +71,7 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 		port:   port,
 		conn: network.NewUDPConnection(server, &net.UDPAddr{
 			IP:   net.IPv4(127, 0, 0, 1),
-			Port: exposedPort.Int(),
+			Port: port,
 		}),
 	}
 
