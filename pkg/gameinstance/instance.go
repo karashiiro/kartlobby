@@ -59,17 +59,11 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 		return nil, err
 	}
 
-	// Get the container info to retrieve the container's IP
-	cj, err := client.ContainerInspect(ctx, resp.ID)
-	if err != nil {
-		return nil, err
-	}
-
 	inst := &GameInstance{
 		client: client,
 		id:     resp.ID,
 		conn: network.NewUDPConnection(server, &net.UDPAddr{
-			IP:   net.ParseIP(cj.NetworkSettings.IPAddress),
+			IP:   net.IPv4(127, 0, 0, 1),
 			Port: exposedPort.Int(),
 		}),
 	}
