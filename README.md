@@ -6,6 +6,13 @@ the same server by leveraging containers to host multiple servers on the same po
 is started for that player, up to a defined maximum number of rooms. When multiple rooms are active at once, new players will be added to the least-populated room first,
 in order to balance players across all rooms.
 
+## Progress
+ - [x] Launching instances manually
+ - [x] Away node PT_ASKINFO
+ - [ ] Joining active instances
+ - [ ] Launching new instances automatically
+ - [ ] TBD
+
 ## Usage
 Run `pull_image.sh` to pull the latest Docker image. If the game ever updates, run it again to update the image to the latest version.
 
