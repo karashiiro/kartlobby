@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/karashiiro/kartlobby/pkg/gameinstance"
@@ -16,13 +17,14 @@ type GatewayServer struct {
 	Instances *gameinstance.GameInstanceManager
 	Server    *net.UDPConn
 
-	port         int
-	maxClients   int
-	maxInstances int
-	clients      map[string]*clientInfo
-	callbacks    map[string]func(network.Connection, []byte)
-	broadcast    *network.BroadcastConnection
-	motd         motd.Motd
+	port          int
+	maxClients    int
+	maxInstances  int
+	clients       map[string]*clientInfo
+	callbacks     map[string]func(network.Connection, []byte)
+	callbackMutex *sync.Mutex
+	broadcast     *network.BroadcastConnection
+	motd          motd.Motd
 }
 
 type GatewayOptions struct {
@@ -36,13 +38,14 @@ func NewServer(opts *GatewayOptions) *GatewayServer {
 	gs := GatewayServer{
 		Instances: gameinstance.NewManager(opts.MaxInstances),
 
-		port:         opts.Port,
-		maxClients:   opts.MaxClients,
-		maxInstances: opts.MaxInstances,
-		clients:      make(map[string]*clientInfo),
-		callbacks:    make(map[string]func(network.Connection, []byte)),
-		broadcast:    network.NewBroadcastConnection(opts.MaxClients),
-		motd:         motd.New(opts.Motd),
+		port:          opts.Port,
+		maxClients:    opts.MaxClients,
+		maxInstances:  opts.MaxInstances,
+		clients:       make(map[string]*clientInfo),
+		callbacks:     make(map[string]func(network.Connection, []byte)),
+		callbackMutex: &sync.Mutex{},
+		broadcast:     network.NewBroadcastConnection(opts.MaxClients),
+		motd:          motd.New(opts.Motd),
 	}
 	return &gs
 }
@@ -98,6 +101,7 @@ func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, res
 	got := make(chan bool, 1)
 
 	// Register a callback for the message we want
+	gs.callbackMutex.Lock()
 	gs.callbacks[addr] = func(conn network.Connection, data []byte) {
 		header := gamenet.PacketHeader{}
 		gamenet.ReadPacket(data, &header)
@@ -106,7 +110,9 @@ func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, res
 
 		if header.PacketType == message {
 			// Unregister this function once we get the message
+			gs.callbackMutex.Lock()
 			delete(gs.callbacks, addr)
+			gs.callbackMutex.Unlock()
 
 			result <- data
 			got <- true
@@ -114,12 +120,15 @@ func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, res
 
 		if _, ok := <-ctx.Done(); ok {
 			// Unregister this function if we didn't get a message within the context bounds
+			gs.callbackMutex.Lock()
 			delete(gs.callbacks, addr)
+			gs.callbackMutex.Unlock()
 
 			err <- ctx.Err()
 			got <- true
 		}
 	}
+	gs.callbackMutex.Unlock()
 
 	<-got
 }
