@@ -45,13 +45,12 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 	log.Println(port)
 
 	// Create the container
-	containerPort := nat.Port("5029/udp")
 	resp, err := client.ContainerCreate(ctx, &container.Config{
 		Image: GAMEIMAGE,
 	}, &container.HostConfig{
 		PortBindings: nat.PortMap{
 			// Bind 5029/udp in the container to our free port on the host
-			containerPort: []nat.PortBinding{{
+			nat.Port("5029/udp"): []nat.PortBinding{{
 				HostPort: fmt.Sprint(port),
 			}},
 		},
