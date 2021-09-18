@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/karashiiro/kartlobby/pkg/colortext"
+	"github.com/karashiiro/kartlobby/pkg/doom"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 	"github.com/karashiiro/kartlobby/pkg/gateway"
 	"github.com/karashiiro/kartlobby/pkg/rest"
@@ -58,7 +59,10 @@ func main() {
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 
-		si, pi, err := gs.Instances.AskInfo(&gamenet.AskInfoPak{}, gs, ctx)
+		si, pi, err := gs.Instances.AskInfo(&gamenet.AskInfoPak{
+			Version: doom.VERSION,
+			Time:    uint32(time.Now().Unix()),
+		}, gs, ctx)
 		if err != nil {
 			return nil, err
 		}
