@@ -49,7 +49,7 @@ func main() {
 			return nil, err
 		}
 
-		log.Println("Created new instance", inst.GetID())
+		log.Printf("Created new instance %s on port %d", inst.GetID(), inst.GetPort())
 
 		return &message{Msg: "Success"}, nil
 	})

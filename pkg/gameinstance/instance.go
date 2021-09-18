@@ -25,6 +25,7 @@ type UDPServer interface {
 type GameInstance struct {
 	client *client.Client
 	id     string
+	port   int
 	conn   network.Connection
 }
 
@@ -62,6 +63,7 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 	inst := &GameInstance{
 		client: client,
 		id:     resp.ID,
+		port:   port,
 		conn: network.NewUDPConnection(server, &net.UDPAddr{
 			IP:   net.IPv4(127, 0, 0, 1),
 			Port: exposedPort.Int(),
@@ -73,6 +75,10 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 
 func (gi *GameInstance) GetID() string {
 	return gi.id
+}
+
+func (gi *GameInstance) GetPort() int {
+	return gi.port
 }
 
 // AskInfo sends a PT_ASKINFO request to the game server behind this instance, returning the resulting
