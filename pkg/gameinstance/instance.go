@@ -3,7 +3,6 @@ package gameinstance
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 
 	"github.com/docker/docker/api/types"
@@ -17,9 +16,14 @@ import (
 const GAMEIMAGE = "brianallred/srb2kart"
 
 type UDPServer interface {
-	// WaitForMessage waits for a message with the provided opcode from the specified address.
+	// WaitForMessage waits for a message with the provided opcode from the specified internal port.
 	// This function should always be called with a timeout context in order to avoid hanging.
-	WaitForMessage(message gamenet.Opcode, addr string, result chan []byte, err chan error, ctx context.Context)
+	WaitForInstanceMessage(key *UDPCallbackKey, result chan []byte, err chan error, ctx context.Context)
+}
+
+type UDPCallbackKey struct {
+	Port    int
+	Message gamenet.Opcode
 }
 
 type GameInstance struct {
@@ -102,12 +106,15 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 	siErrChan := make(chan error, 1)
 	piErrChan := make(chan error, 1)
 
-	addr := gi.conn.Addr().String()
-
 	// Launch goroutines waiting for the responses
-	log.Println("Launching goroutines...")
-	go server.WaitForMessage(gamenet.PT_SERVERINFO, addr, serverInfoChan, siErrChan, ctx)
-	go server.WaitForMessage(gamenet.PT_PLAYERINFO, addr, playerInfoChan, piErrChan, ctx)
+	go server.WaitForInstanceMessage(&UDPCallbackKey{
+		Port:    gi.port,
+		Message: gamenet.PT_SERVERINFO,
+	}, serverInfoChan, siErrChan, ctx)
+	go server.WaitForInstanceMessage(&UDPCallbackKey{
+		Port:    gi.port,
+		Message: gamenet.PT_PLAYERINFO,
+	}, playerInfoChan, piErrChan, ctx)
 
 	// Forward the PT_ASKINFO request from the caller
 	err := gamenet.SendPacket(gi.conn, askInfo)
@@ -116,12 +123,10 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 	}
 
 	// Wait for a result
-	log.Println("Waiting for results...")
 	serverInfoBytes := <-serverInfoChan
 	playerInfoBytes := <-playerInfoChan
 
 	// Error checking; context cancellations
-	log.Println("Checking errors...")
 	siErr := <-siErrChan
 	if siErr != nil {
 		return nil, nil, siErr
@@ -133,12 +138,18 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 	}
 
 	// Unmarshalling and returning results
-	log.Println("Sending replies...")
 	serverInfo := gamenet.ServerInfoPak{}
 	playerInfo := gamenet.PlayerInfoPak{}
 
-	gamenet.ReadPacket(serverInfoBytes, &serverInfo)
-	gamenet.ReadPacket(playerInfoBytes, &playerInfo)
+	err = gamenet.ReadPacket(serverInfoBytes, &serverInfo)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = gamenet.ReadPacket(playerInfoBytes, &playerInfo)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return &serverInfo, &playerInfo, nil
 }

@@ -3,13 +3,20 @@ package gamenet
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
 
-func ReadPacket(data []byte, s interface{}) {
+func ReadPacket(data []byte, s interface{}) error {
 	buf := bytes.NewReader(data)
 	binary.Read(buf, binary.LittleEndian, s)
+
+	if header, ok := s.(*PacketHeader); ok && header.Checksum != netBufferChecksum(data[4:]) {
+		return errors.New("checksum mismatch")
+	}
+
+	return nil
 }
 
 func SendPacket(conn network.Connection, data interface{}) error {

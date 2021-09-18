@@ -17,14 +17,16 @@ type GatewayServer struct {
 	Instances *gameinstance.GameInstanceManager
 	Server    *net.UDPConn
 
-	port          int
-	maxClients    int
-	maxInstances  int
-	clients       map[string]*clientInfo
-	callbacks     map[string]func(network.Connection, []byte)
-	callbackMutex *sync.Mutex
-	broadcast     *network.BroadcastConnection
-	motd          motd.Motd
+	port         int
+	maxClients   int
+	maxInstances int
+	clients      map[string]*clientInfo
+	broadcast    *network.BroadcastConnection
+	motd         motd.Motd
+
+	// Callbacks for internal servers, keyed on the container port
+	internalCallbacks      map[gameinstance.UDPCallbackKey]func(network.Connection, *gamenet.PacketHeader, []byte)
+	internalCallbacksMutex *sync.Mutex
 }
 
 type GatewayOptions struct {
@@ -38,14 +40,15 @@ func NewServer(opts *GatewayOptions) *GatewayServer {
 	gs := GatewayServer{
 		Instances: gameinstance.NewManager(opts.MaxInstances),
 
-		port:          opts.Port,
-		maxClients:    opts.MaxClients,
-		maxInstances:  opts.MaxInstances,
-		clients:       make(map[string]*clientInfo),
-		callbacks:     make(map[string]func(network.Connection, []byte)),
-		callbackMutex: &sync.Mutex{},
-		broadcast:     network.NewBroadcastConnection(opts.MaxClients),
-		motd:          motd.New(opts.Motd),
+		port:         opts.Port,
+		maxClients:   opts.MaxClients,
+		maxInstances: opts.MaxInstances,
+		clients:      make(map[string]*clientInfo),
+		broadcast:    network.NewBroadcastConnection(opts.MaxClients),
+		motd:         motd.New(opts.Motd),
+
+		internalCallbacks:      make(map[gameinstance.UDPCallbackKey]func(network.Connection, *gamenet.PacketHeader, []byte)),
+		internalCallbacksMutex: &sync.Mutex{},
 	}
 	return &gs
 }
@@ -69,7 +72,7 @@ func (gs *GatewayServer) Close() {
 func (gs *GatewayServer) Run() error {
 	server, err := net.ListenUDP("udp", &net.UDPAddr{Port: gs.port})
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 	gs.Server = server
 
@@ -77,72 +80,100 @@ func (gs *GatewayServer) Run() error {
 		// PT_SERVERINFO should be the largest packet at 1024 bytes.
 		// d_clisrv.h notes 64kB packets under doomdata_t, but those
 		// are probably junk numbers.
-		data := make([]byte, 1024)
+		//
+		// Regardless of that, this returns an error showing that the
+		// buffer is too small when the server sends that packet, so
+		// we're just going to allocate double that amount.
+		data := make([]byte, 2048)
 		_, addr, err := gs.Server.ReadFrom(data)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
 
-		conn := network.NewUDPConnection(gs.Server, addr)
+		// Only process UDP connections
+		if udpAddr, udpOk := addr.(*net.UDPAddr); udpOk {
+			conn := network.NewUDPConnection(gs.Server, addr)
 
-		// Check if we have any callbacks registered and run them if so.
-		if cb, ok := gs.callbacks[addr.String()]; ok {
-			go cb(conn, data)
-		} else {
-			go gs.handlePacket(conn, addr.(*net.UDPAddr), data)
+			// Check if we have any container message callbacks registered and run them if so.
+			header := gamenet.PacketHeader{}
+			err := gamenet.ReadPacket(data, &header)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			cbKey := gameinstance.UDPCallbackKey{
+				Port:    udpAddr.Port,
+				Message: header.PacketType,
+			}
+
+			if cb, cbOk := gs.internalCallbacks[cbKey]; cbOk {
+				go cb(conn, &header, data)
+			} else {
+				// Handle the packet normally
+				go gs.handlePacket(conn, addr.(*net.UDPAddr), &header, data)
+			}
 		}
 	}
 }
 
-// WaitForMessage waits for a message with the provided opcode from the specified address.
+// WaitForInstanceMessage waits for a message with the provided opcode from the specified internal port.
 // This function should always be called with a timeout context in order to avoid hanging.
-func (gs *GatewayServer) WaitForMessage(message gamenet.Opcode, addr string, result chan []byte, err chan error, ctx context.Context) {
+func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey, result chan []byte, err chan error, ctx context.Context) {
 	got := make(chan bool, 1)
 
+	// Cleanup function
+	onGot := func() {
+		// Unregister the callback function
+		gs.internalCallbacksMutex.Lock()
+		delete(gs.internalCallbacks, *key)
+		gs.internalCallbacksMutex.Unlock()
+
+		got <- true
+
+		close(result)
+		close(err)
+	}
+
 	// Register a callback for the message we want
-	gs.callbackMutex.Lock()
-	gs.callbacks[addr] = func(conn network.Connection, data []byte) {
-		header := gamenet.PacketHeader{}
-		gamenet.ReadPacket(data, &header)
+	gs.internalCallbacksMutex.Lock()
+	gs.internalCallbacks[*key] = func(conn network.Connection, header *gamenet.PacketHeader, data []byte) {
+		log.Printf("Callback (%v): Got packet from %s with type %d", *key, conn.Addr().String(), header.PacketType)
 
-		log.Printf("Got packet from %s with type %d", conn.Addr().String(), header.PacketType)
-
-		if header.PacketType == message {
-			// Unregister this function once we get the message
-			gs.callbackMutex.Lock()
-			delete(gs.callbacks, addr)
-			gs.callbackMutex.Unlock()
-
+		if header.PacketType == key.Message {
 			result <- data
-			got <- true
-		}
-
-		if _, ok := <-ctx.Done(); ok {
-			// Unregister this function if we didn't get a message within the context bounds
-			gs.callbackMutex.Lock()
-			delete(gs.callbacks, addr)
-			gs.callbackMutex.Unlock()
-
-			err <- ctx.Err()
-			got <- true
+			onGot()
 		}
 	}
-	gs.callbackMutex.Unlock()
+	gs.internalCallbacksMutex.Unlock()
+
+	// Context timeout check
+	go func() {
+		<-ctx.Done()
+		select {
+		case <-err:
+			return
+		default:
+			err <- ctx.Err()
+			onGot()
+		}
+	}()
 
 	<-got
 }
 
-func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr, data []byte) {
-	header := gamenet.PacketHeader{}
-	gamenet.ReadPacket(data, &header)
-
+func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr, header *gamenet.PacketHeader, data []byte) {
 	log.Printf("Got packet from %s with type %d", conn.Addr().String(), header.PacketType)
 
 	switch header.PacketType {
 	case gamenet.PT_ASKINFO:
 		askInfo := gamenet.AskInfoPak{}
-		gamenet.ReadPacket(data, &askInfo)
+		err := gamenet.ReadPacket(data, &askInfo)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		// Prepare to wait up to 3 seconds for a server response
 		ctx := context.Background()

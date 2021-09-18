@@ -13,7 +13,6 @@ type PacketHeader struct {
 	Reserved   uint8 // Padding
 }
 
-const MAXFILENEEDED = 915
 const MAX_MIRROR_LENGTH = 256
 
 type ServerInfoPak struct {
@@ -40,7 +39,7 @@ type ServerInfoPak struct {
 	ActNum         uint8
 	IsZone         uint8
 	HttpSource     [MAX_MIRROR_LENGTH]byte
-	FileNeeded     [MAXFILENEEDED]byte
+	FileNeeded     [915]byte
 }
 
 type PlayerInfoPak struct {

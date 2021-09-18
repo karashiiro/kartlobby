@@ -60,6 +60,9 @@ func main() {
 		defer cancel()
 
 		si, pi, err := gs.Instances.AskInfo(&gamenet.AskInfoPak{
+			PacketHeader: gamenet.PacketHeader{
+				PacketType: gamenet.PT_ASKINFO,
+			},
 			Version: doom.VERSION,
 			Time:    uint32(time.Now().Unix()),
 		}, gs, ctx)
