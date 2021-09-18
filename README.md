@@ -1,5 +1,8 @@
 # kartlobby
-(WIP) A lobby server for [SRB2Kart](https://github.com/STJr/Kart-Public).
+(WIP) A lobby server for [SRB2Kart](https://github.com/STJr/Kart-Public). This application allows for more than a single dedicated server's worth of players to play on
+the same server by leveraging containers to host multiple servers on the same port. When one dedicated server becomes full and a new player joins, a new dedicated server
+is started for that player, up to a defined maximum number of rooms. When multiple rooms are active at once, new players will be added to the least-populated room first,
+in order to balance players across all rooms.
 
 ## Usage
 Run `pull_image.sh` to pull the latest Docker image. If the game ever updates, run it again to update the image to the latest version.
