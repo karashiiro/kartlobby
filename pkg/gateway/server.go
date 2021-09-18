@@ -182,6 +182,23 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr
 			// For future reference: We need to make sure that the server reads the sender IP field
 			// as the client's, and not ours. Because of this, we need to create the connections in
 			// the client info with *new* UDP servers created with DialUDP.
+
+			/*var gameAddr *net.UDPAddr
+
+			fromGame, err := net.DialUDP("udp", addr, gameAddr)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			fromClient, err := net.DialUDP("udp", gameAddr, addr)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			connToGame := network.NewUDPConnection(fromClient, gameAddr)
+			connToClient := network.NewUDPConnection(fromGame, addr)*/
 		}
 	}
 }
