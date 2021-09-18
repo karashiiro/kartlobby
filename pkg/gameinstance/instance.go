@@ -42,8 +42,6 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 		return nil, err
 	}
 
-	log.Println(port)
-
 	// Create the container
 	resp, err := client.ContainerCreate(ctx, &container.Config{
 		Image: GAMEIMAGE,
@@ -64,12 +62,18 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 		return nil, err
 	}
 
+	// Get the host IP
+	ip, err := network.GetLocalIP()
+	if err != nil {
+		return nil, err
+	}
+
 	inst := &GameInstance{
 		client: client,
 		id:     resp.ID,
 		port:   port,
 		conn: network.NewUDPConnection(server, &net.UDPAddr{
-			IP:   net.IPv4(127, 0, 0, 1),
+			IP:   *ip,
 			Port: port,
 		}),
 	}
