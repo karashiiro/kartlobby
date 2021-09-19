@@ -42,15 +42,22 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	motd := config.Motd
+	if motd == "" {
+		motd = colortext.
+			New().
+			AppendTextColored("kartlobby", colortext.Cyan).
+			Build()
+	} else {
+		motd = colortext.Parse(motd)
+	}
+
 	// Create gateway server
 	gs, err := gateway.NewServer(&gateway.GatewayOptions{
 		Port:         config.GatewayPort,
 		MaxInstances: config.MaxRooms,
-		Motd: colortext.
-			New().
-			AppendTextColored("kartlobby", colortext.Cyan).
-			Build(),
-		DockerImage: config.DockerImage,
+		Motd:         motd,
+		DockerImage:  config.DockerImage,
 	})
 	if err != nil {
 		log.Fatalln(err)
