@@ -28,16 +28,6 @@ func NewManager(maxInstances int) *GameInstanceManager {
 	return &m
 }
 
-func (m *GameInstanceManager) IsInstanceAddress(addr net.Addr) bool {
-	for instAddr := range m.instances {
-		if instAddr == addr.String() {
-			return true
-		}
-	}
-
-	return false
-}
-
 // AskInfo sends a PT_ASKINFO request to the game server behind the first available instance we're tracking,
 // returning the resulting PT_SERVERINFO and PT_PLAYERINFO packets. A timeout context should
 // always be provided in order to prevent an application hang in the event that the server doesn't respond.

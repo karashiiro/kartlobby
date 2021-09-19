@@ -9,7 +9,7 @@ in order to balance players across all rooms.
 ## Progress
  - [x] Launching instances manually
  - [x] Away node PT_ASKINFO
- - [ ] Joining active instances
+ - [x] Joining active instances
  - [ ] Launching new instances automatically
  - [ ] TBD
 
