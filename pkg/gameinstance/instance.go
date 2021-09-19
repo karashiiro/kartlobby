@@ -1,6 +1,7 @@
 package gameinstance
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
@@ -49,7 +50,10 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 
 	// Create the container
 	resp, err := client.ContainerCreate(ctx, &container.Config{
-		Image: GAMEIMAGE,
+		AttachStdout: true,
+		AttachStderr: true,
+		Tty:          true,
+		Image:        GAMEIMAGE,
 	}, &container.HostConfig{
 		PortBindings: nat.PortMap{
 			// Bind 5029/udp in the container to our free port on the host
@@ -65,6 +69,38 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 	// Start the container
 	if err := client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		return nil, err
+	}
+
+	// Follow the logs and wait until the server is ready
+	reader, err := client.ContainerLogs(ctx, resp.ID, types.ContainerLogsOptions{
+		ShowStderr: true,
+		ShowStdout: true,
+		Timestamps: false,
+		Follow:     true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	got := make(chan bool, 1)
+	go func() {
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			logLine := scanner.Text()
+			if logLine == "Entering main game loop..." {
+				got <- true
+				break
+			}
+		}
+	}()
+	go func() {
+		<-ctx.Done()
+		got <- false
+	}()
+
+	if <-got && ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	// Get the host IP
