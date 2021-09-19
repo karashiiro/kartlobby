@@ -30,7 +30,8 @@ func runApplicationLoop(fn func() error, errChan chan error) {
 
 func main() {
 	gs, err := gateway.NewServer(&gateway.GatewayOptions{
-		Port: 5029,
+		Port:         5029,
+		MaxInstances: 1,
 		Motd: colortext.
 			New().
 			AppendTextColored("kartlobby", colortext.Cyan).

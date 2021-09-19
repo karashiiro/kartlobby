@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/karashiiro/kartlobby/pkg/doom"
@@ -13,16 +14,20 @@ import (
 )
 
 type GameInstanceManager struct {
-	numInstances int
-	maxInstances int
-	instances    map[string]*GameInstance
+	numInstances            int
+	maxInstances            int
+	instances               map[string]*GameInstance
+	instanceGetOrCreateLock *sync.Mutex
+	instanceCreateLock      *sync.Mutex
 }
 
 func NewManager(maxInstances int) *GameInstanceManager {
 	m := GameInstanceManager{
-		numInstances: 0,
-		maxInstances: maxInstances,
-		instances:    make(map[string]*GameInstance),
+		numInstances:            0,
+		maxInstances:            maxInstances,
+		instances:               make(map[string]*GameInstance),
+		instanceGetOrCreateLock: &sync.Mutex{},
+		instanceCreateLock:      &sync.Mutex{},
 	}
 
 	return &m
@@ -42,8 +47,19 @@ func (m *GameInstanceManager) AskInfo(askInfo *gamenet.AskInfoPak, server UDPSer
 	return nil, nil, errors.New("no instances are active")
 }
 
-// CreateInstance creates a new instance, returning an error if this fails for any reason.
+// CreateInstance creates a new instance, returning an error if this fails for any reason, including the
+// maximum number of instances already having been created.
 func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, error) {
+	// Lock here so that concurrent requests don't risk pushing
+	// us over the maximum instance count
+	m.instanceCreateLock.Lock()
+	defer m.instanceCreateLock.Unlock()
+
+	// Check if we've maxed-out on instances
+	if m.numInstances == m.maxInstances {
+		return nil, errors.New("maximum number of instances created")
+	}
+
 	// Create a new instance
 	newInstance, err := newInstance(conn)
 	if err != nil {
@@ -54,6 +70,7 @@ func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, 
 	m.instances[newInstance.Conn.Addr().String()] = newInstance
 
 	log.Printf("Created new instance %s on port %d", newInstance.id, newInstance.port)
+	m.numInstances++
 
 	return newInstance, nil
 }
@@ -63,6 +80,12 @@ func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, 
 // new instance will be created. If we are already tracking our maximum number of instances,
 // an error is returned.
 func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server UDPServer) (*GameInstance, error) {
+	// We lock here so that if another get/create request occurs that results in an instance being created,
+	// that happens before we attempt to do the same ourselves. Otherwise, many connections occurring at once
+	// could create a bunch of containers and overload the server.
+	m.instanceGetOrCreateLock.Lock()
+	defer m.instanceGetOrCreateLock.Unlock()
+
 	var instancePlayers int = math.MaxInt
 	var instance *GameInstance
 
