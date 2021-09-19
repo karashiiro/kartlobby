@@ -26,7 +26,7 @@ type GatewayServer struct {
 	motd         motd.Motd
 
 	// Connection map from clients to servers
-	clients      map[string]*clientInfo
+	clients      map[string]*gameProxy
 	clientsMutex *sync.Mutex
 
 	// Callbacks for internal servers
@@ -60,7 +60,7 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		broadcast:    broadcast,
 		motd:         motd.New(opts.Motd),
 
-		clients:      make(map[string]*clientInfo),
+		clients:      make(map[string]*gameProxy),
 		clientsMutex: &sync.Mutex{},
 
 		internalCallbacks:      make(map[string]func(network.Connection, *gamenet.PacketHeader, []byte)),
@@ -279,9 +279,9 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			return
 		}
 	default:
-		var peer *clientInfo
-		if knownPeer, ok := gs.clients[conn.Addr().String()]; ok {
-			peer = knownPeer
+		var proxy *gameProxy
+		if knownProxy, ok := gs.clients[conn.Addr().String()]; ok {
+			proxy = knownProxy
 		} else {
 			gs.clientsMutex.Lock()
 			defer gs.clientsMutex.Unlock()
@@ -312,20 +312,6 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 				return
 			}
 
-			// Get a free port to proxy through
-			proxyPort, err := network.GetFreePort()
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			// Start a new UDP server on our proxy port
-			proxy, err := net.ListenUDP("udp", &net.UDPAddr{Port: proxyPort})
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
 			// Create the player connection, which forwards messages received from
 			// the proxy to a player
 			playerConn := network.NewUDPConnection(gs.Server, clientAddr)
@@ -333,40 +319,22 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			// Set the connection so we can broadcast global messages to it
 			gs.broadcast.Set(playerConn)
 
-			// TODO: This is an untracked goroutine and therefore potentially error-prone
-			go func() {
-				var proxyData [2048]byte
-				for {
-					// Read packet from the game
-					n, _, err := proxy.ReadFrom(proxyData[:])
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-
-					// Forward packet to the client
-					err = playerConn.Send(proxyData[:n])
-					if err != nil {
-						log.Println(err)
-					}
-				}
-			}()
-
-			// Set the remote connection to one that directs messages *from* the
-			// proxy server *to* the game
-			gameConn := network.NewUDPConnection(proxy, inst.Conn.Addr())
-
-			peer = &clientInfo{
-				clientAddr: clientAddr,
-				gameConn:   gameConn,
-				proxy:      proxy,
+			// Start a new UDP server to proxy through
+			proxy, err = newGameProxy(playerConn, inst)
+			if err != nil {
+				log.Println(err)
+				return
 			}
 
-			gs.clients[conn.Addr().String()] = peer
+			// TODO: This is an untracked goroutine and therefore potentially error-prone
+			go proxy.Run()
+
+			// Store the proxy for future packets
+			gs.clients[conn.Addr().String()] = proxy
 		}
 
 		// Forward packet to the game
-		err := peer.gameConn.Send(data[:n])
+		err := proxy.SendToGame(data[:n])
 		if err != nil {
 			log.Println(err)
 			return
