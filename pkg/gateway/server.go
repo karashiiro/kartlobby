@@ -118,7 +118,7 @@ func (gs *GatewayServer) Run() error {
 				go cb(conn, &header, data)
 			} else {
 				// Handle the packet normally
-				go gs.handlePacket(conn, addr.(*net.UDPAddr), &header, data, n)
+				go gs.handlePacket(conn, udpAddr, &header, data, n)
 			}
 			gs.internalCallbacksMutex.Unlock()
 		}
