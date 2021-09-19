@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"time"
 
@@ -30,9 +31,13 @@ func runApplicationLoop(fn func() error, errChan chan error) {
 }
 
 func main() {
+	// Flag parsing
+	configPath := flag.String("config", "config.yml", "The configuration file path")
+	flag.Parse()
+
 	// Load configuration
 	var config Configuration
-	err := configor.Load(&config, "config.yml")
+	err := configor.Load(&config, *configPath)
 	if err != nil {
 		log.Fatalln(err)
 	}
