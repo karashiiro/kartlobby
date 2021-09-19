@@ -20,9 +20,12 @@ type GatewayServer struct {
 	port         int
 	maxClients   int
 	maxInstances int
-	clients      map[string]*clientInfo
 	broadcast    *network.BroadcastConnection
 	motd         motd.Motd
+
+	// Connection map of both clients and servers
+	peers      map[string]*peerInfo
+	peersMutex *sync.Mutex
 
 	// Callbacks for internal servers, keyed on the container port
 	internalCallbacks      map[gameinstance.UDPCallbackKey]func(network.Connection, *gamenet.PacketHeader, []byte)
@@ -43,9 +46,11 @@ func NewServer(opts *GatewayOptions) *GatewayServer {
 		port:         opts.Port,
 		maxClients:   opts.MaxClients,
 		maxInstances: opts.MaxInstances,
-		clients:      make(map[string]*clientInfo),
 		broadcast:    network.NewBroadcastConnection(opts.MaxClients),
 		motd:         motd.New(opts.Motd),
+
+		peers:      make(map[string]*peerInfo),
+		peersMutex: &sync.Mutex{},
 
 		internalCallbacks:      make(map[gameinstance.UDPCallbackKey]func(network.Connection, *gamenet.PacketHeader, []byte)),
 		internalCallbacksMutex: &sync.Mutex{},
@@ -85,7 +90,7 @@ func (gs *GatewayServer) Run() error {
 		// buffer is too small when the server sends that packet, so
 		// we're just going to allocate double that amount.
 		data := make([]byte, 2048)
-		_, addr, err := gs.Server.ReadFrom(data)
+		n, addr, err := gs.Server.ReadFrom(data)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -93,7 +98,7 @@ func (gs *GatewayServer) Run() error {
 
 		// Only process UDP connections
 		if udpAddr, udpOk := addr.(*net.UDPAddr); udpOk {
-			conn := network.NewUDPConnection(gs.Server, addr)
+			conn := network.NewUDPConnection(gs.Server, udpAddr)
 
 			// Check if we have any container message callbacks registered and run them if so.
 			header := gamenet.PacketHeader{}
@@ -112,7 +117,7 @@ func (gs *GatewayServer) Run() error {
 				go cb(conn, &header, data)
 			} else {
 				// Handle the packet normally
-				go gs.handlePacket(conn, addr.(*net.UDPAddr), &header, data)
+				go gs.handlePacket(conn, addr.(*net.UDPAddr), &header, data, n)
 			}
 		}
 	}
@@ -163,7 +168,7 @@ func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey
 	<-got
 }
 
-func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr, header *gamenet.PacketHeader, data []byte) {
+func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr, header *gamenet.PacketHeader, data []byte, n int) {
 	log.Printf("Got packet from %s with type %d", conn.Addr().String(), header.PacketType)
 
 	switch header.PacketType {
@@ -210,32 +215,106 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr
 			return
 		}
 	default:
-		if client, ok := gs.clients[conn.Addr().String()]; ok {
-			log.Println("Got unknown packet, forwarding...")
-			err := gamenet.SendPacket(client.gameConn, data)
-			if err != nil {
-				log.Println(err)
-				return
-			}
+		var peer *peerInfo
+		if knownPeer, ok := gs.peers[conn.Addr().String()]; ok {
+			peer = knownPeer
 		} else {
-			log.Println("Got unknown packet, can't do anything")
-			// For future reference: We need to make sure that the server reads the sender IP field
-			// as the client's, and not ours. Because of this, we need to create the connections in
-			// the client info with *new* UDP servers created with DialUDP.
+			gs.peersMutex.Lock()
+			defer gs.peersMutex.Unlock()
 
-			/*var gameAddr *net.UDPAddr
+			// Create a new map entry to forward this sender's packets to a receiver.
+			//
+			// We need to make sure that the receiver reads the sender IP field
+			// as the sender's, and not ours. Because of this, we need to create
+			// the connections in the sender info with *new* UDP receivers created
+			// with DialUDP.
 
-			fromClient, err := net.DialUDP("udp", gameAddr, addr)
-			if err != nil {
-				log.Println(err)
-				return
+			var localAddr *net.UDPAddr = addr // The address that the message is coming *from*
+			var remoteAddr *net.UDPAddr       // The address that we want messages from localAddr to go *to*
+			var remoteConn network.Connection
+			var proxy *net.UDPConn
+
+			if gs.Instances.IsInstanceAddress(addr) {
+				// The message is from the game
+				for _, peerInfo := range gs.peers {
+					// If the remote address of the peer is the internal server
+					if peerInfo.remoteConn.Addr().String() == localAddr.String() {
+						// Set the remote address of this connection to the local
+						// address of the peer, and the proxy to the proxy we started
+						// when the client connected
+						remoteAddr = peerInfo.localAddr.(*net.UDPAddr)
+						proxy = peer.proxy
+					}
+				}
+
+				// Create the remote connection, which should make us appear to the game
+				// as a distinct client (e.g. not the gateway server)
+				remoteConn = network.NewUDPConnection(proxy, remoteAddr)
+
+				// Create the player connection, which forwards messages received from
+				// the proxy to a player
+				playerConn := network.NewUDPConnection(gs.Server, localAddr)
+
+				// TODO: This is an untracked goroutine and therefore potentially error-prone
+				go func() {
+					for {
+						// Read packets from the game
+						proxyData := make([]byte, 2048)
+						_, _, err := proxy.ReadFrom(proxyData)
+						if err != nil {
+							log.Println(err)
+							continue
+						}
+
+						// Write packets to the client
+						playerConn.Send(proxyData)
+					}
+				}()
+			} else {
+				// The message is from a player, get or create an open instance
+				inst, err := gs.Instances.GetOrCreateOpenInstance(gs.Server, gs)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				// Get a free port to proxy through
+				proxyPort, err := network.GetFreePort()
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				// Start a new UDP server on our proxy port
+				proxy, err = net.ListenUDP("udp", &net.UDPAddr{Port: proxyPort})
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				// Set the remote address to the open instance
+				remoteAddr = inst.Conn.Addr().(*net.UDPAddr)
+
+				// Set the remote connection to one that directs messages from the
+				// proxy server to the game
+				remoteConn = network.NewUDPConnection(proxy, remoteAddr)
 			}
 
-			gameConn := network.NewUDPConnection(fromClient, gameAddr)
+			peer = &peerInfo{
+				localAddr:  localAddr,
+				remoteConn: remoteConn,
+				proxy:      proxy,
+			}
 
-			gs.clients[conn.Addr().String()] = &clientInfo{
-				gameConn: gameConn,
-			}*/
+			gs.peers[conn.Addr().String()] = peer
+		}
+
+		// Forward packet to intended recipient
+		log.Printf("Writing packet to %s using sender %s", peer.remoteConn.Addr().String(), peer.proxy.LocalAddr().String())
+		err := peer.remoteConn.Send(data[0:n])
+		if err != nil {
+			log.Println(err)
+			return
 		}
 	}
 }

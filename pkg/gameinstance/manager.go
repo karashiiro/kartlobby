@@ -3,10 +3,12 @@ package gameinstance
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"net"
 	"time"
 
+	"github.com/karashiiro/kartlobby/pkg/doom"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 )
 
@@ -24,6 +26,16 @@ func NewManager(maxInstances int) *GameInstanceManager {
 	}
 
 	return &m
+}
+
+func (m *GameInstanceManager) IsInstanceAddress(addr net.Addr) bool {
+	for instAddr, _ := range m.instances {
+		if instAddr == addr.String() {
+			return true
+		}
+	}
+
+	return false
 }
 
 // AskInfo sends a PT_ASKINFO request to the game server behind the first available instance we're tracking,
@@ -49,7 +61,9 @@ func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, 
 	}
 
 	// Register the instance
-	m.instances[newInstance.conn.Addr().String()] = newInstance
+	m.instances[newInstance.Conn.Addr().String()] = newInstance
+
+	log.Printf("Created new instance %s on port %d", newInstance.id, newInstance.port)
 
 	return newInstance, nil
 }
@@ -67,9 +81,17 @@ func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server 
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 
-		_, pi, err := inst.AskInfo(&gamenet.AskInfoPak{}, server, ctx)
+		// Get the player info from the server
+		_, pi, err := inst.AskInfo(&gamenet.AskInfoPak{
+			PacketHeader: gamenet.PacketHeader{
+				PacketType: gamenet.PT_ASKINFO,
+			},
+			Version: doom.VERSION,
+			Time:    uint32(time.Now().Unix()),
+		}, server, ctx)
 		if err != nil {
-			// We should do something about this, maybe?
+			// We should do some recovery or cleanup here, maybe?
+			log.Println(err)
 			continue
 		}
 

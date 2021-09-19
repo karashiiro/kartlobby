@@ -27,10 +27,11 @@ type UDPCallbackKey struct {
 }
 
 type GameInstance struct {
+	Conn network.Connection
+
 	client *client.Client
 	id     string
 	port   int
-	conn   network.Connection
 }
 
 func newInstance(server *net.UDPConn) (*GameInstance, error) {
@@ -73,13 +74,14 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 	}
 
 	inst := &GameInstance{
-		client: client,
-		id:     resp.ID,
-		port:   port,
-		conn: network.NewUDPConnection(server, &net.UDPAddr{
+		Conn: network.NewUDPConnection(server, &net.UDPAddr{
 			IP:   *ip,
 			Port: port,
 		}),
+
+		client: client,
+		id:     resp.ID,
+		port:   port,
 	}
 
 	return inst, nil
@@ -117,7 +119,7 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 	}, playerInfoChan, piErrChan, ctx)
 
 	// Forward the PT_ASKINFO request from the caller
-	err := gamenet.SendPacket(gi.conn, askInfo)
+	err := gamenet.SendPacket(gi.Conn, askInfo)
 	if err != nil {
 		return nil, nil, err
 	}

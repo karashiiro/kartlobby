@@ -44,12 +44,10 @@ func main() {
 	})
 
 	r.Get("/new", func() (interface{}, error) {
-		inst, err := gs.Instances.CreateInstance(gs.Server)
+		_, err := gs.Instances.CreateInstance(gs.Server)
 		if err != nil {
 			return nil, err
 		}
-
-		log.Printf("Created new instance %s on port %d", inst.GetID(), inst.GetPort())
 
 		return &message{Msg: "Success"}, nil
 	})
