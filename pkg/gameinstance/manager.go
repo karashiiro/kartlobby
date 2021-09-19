@@ -29,7 +29,7 @@ func NewManager(maxInstances int) *GameInstanceManager {
 }
 
 func (m *GameInstanceManager) IsInstanceAddress(addr net.Addr) bool {
-	for instAddr, _ := range m.instances {
+	for instAddr := range m.instances {
 		if instAddr == addr.String() {
 			return true
 		}
