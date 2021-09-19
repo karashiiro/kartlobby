@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	"github.com/google/uuid"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
@@ -23,8 +24,9 @@ type UDPServer interface {
 }
 
 type UDPCallbackKey struct {
-	Port    int
-	Message gamenet.Opcode
+	Context  string
+	GamePort int
+	Message  gamenet.Opcode
 }
 
 type GameInstance struct {
@@ -146,12 +148,14 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 
 	// Launch goroutines waiting for the responses
 	go server.WaitForInstanceMessage(&UDPCallbackKey{
-		Port:    gi.port,
-		Message: gamenet.PT_SERVERINFO,
+		Context:  uuid.New().String(),
+		GamePort: gi.port,
+		Message:  gamenet.PT_SERVERINFO,
 	}, serverInfoChan, siErrChan, ctx)
 	go server.WaitForInstanceMessage(&UDPCallbackKey{
-		Port:    gi.port,
-		Message: gamenet.PT_PLAYERINFO,
+		Context:  uuid.New().String(),
+		GamePort: gi.port,
+		Message:  gamenet.PT_PLAYERINFO,
 	}, playerInfoChan, piErrChan, ctx)
 
 	// Forward the PT_ASKINFO request from the caller

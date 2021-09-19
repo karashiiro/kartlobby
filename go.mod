@@ -25,6 +25,7 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.0.2 // indirect
+	github.com/google/uuid v1.3.0
 	github.com/klauspost/compress v1.13.4 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect

@@ -2,8 +2,11 @@ package gateway
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,9 +29,17 @@ type GatewayServer struct {
 	clients      map[string]*clientInfo
 	clientsMutex *sync.Mutex
 
-	// Callbacks for internal servers, keyed on the container port
-	internalCallbacks      map[gameinstance.UDPCallbackKey]func(network.Connection, *gamenet.PacketHeader, []byte)
+	// Callbacks for internal servers
+	internalCallbacks      map[string]func(network.Connection, *gamenet.PacketHeader, []byte)
 	internalCallbacksMutex *sync.Mutex
+
+	// Clients waiting for an instance to be created
+	instanceCreationWaiters      map[string]bool
+	instanceCreationWaitersMutex *sync.Mutex
+
+	// Clients waiting to join an instance
+	instanceJoinWaiters      map[string]bool
+	instanceJoinWaitersMutex *sync.Mutex
 }
 
 type GatewayOptions struct {
@@ -54,8 +65,14 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		clients:      make(map[string]*clientInfo),
 		clientsMutex: &sync.Mutex{},
 
-		internalCallbacks:      make(map[gameinstance.UDPCallbackKey]func(network.Connection, *gamenet.PacketHeader, []byte)),
+		internalCallbacks:      make(map[string]func(network.Connection, *gamenet.PacketHeader, []byte)),
 		internalCallbacksMutex: &sync.Mutex{},
+
+		instanceCreationWaiters:      make(map[string]bool),
+		instanceCreationWaitersMutex: &sync.Mutex{},
+
+		instanceJoinWaiters:      make(map[string]bool),
+		instanceJoinWaitersMutex: &sync.Mutex{},
 	}
 
 	return &gs, nil
@@ -112,16 +129,19 @@ func (gs *GatewayServer) Run() error {
 				continue
 			}
 
-			cbKey := gameinstance.UDPCallbackKey{
-				Port:    udpAddr.Port,
-				Message: header.PacketType,
+			gs.internalCallbacksMutex.Lock()
+			// Run a callback if we have any matching ones
+			ranCb := false
+			for key, cb := range gs.internalCallbacks {
+				if strings.HasPrefix(key, fmt.Sprintf("%d-%d", udpAddr.Port, header.PacketType)) {
+					go cb(conn, &header, data)
+					ranCb = true
+					break
+				}
 			}
 
-			gs.internalCallbacksMutex.Lock()
-			if cb, cbOk := gs.internalCallbacks[cbKey]; cbOk {
-				go cb(conn, &header, data)
-			} else {
-				// Handle the packet normally
+			// Otherwise, handle the packet normally
+			if !ranCb {
 				go gs.handlePacket(conn, udpAddr, &header, data, n)
 			}
 			gs.internalCallbacksMutex.Unlock()
@@ -130,31 +150,58 @@ func (gs *GatewayServer) Run() error {
 }
 
 // WaitForInstanceMessage waits for a message with the provided opcode from the specified internal port.
-// This function should always be called with a timeout context in order to avoid hanging.
-func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey, result chan []byte, err chan error, ctx context.Context) {
+// If the context specified in the callback key already has callbacks registered for this message, an
+// error is returned. This function should always be called with a timeout context in order to avoid hanging.
+func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey, result chan []byte, errChan chan error, ctx context.Context) {
+	// Create the key
+	keyStr := fmt.Sprintf("%d-%d-%s", key.GamePort, key.Message, key.Context)
+
+	// Check if we have a callback registered already
+	gs.internalCallbacksMutex.Lock()
+	if _, ok := gs.internalCallbacks[keyStr]; ok {
+		result <- nil
+		errChan <- errors.New("callback already registered")
+
+		close(result)
+		close(errChan)
+
+		gs.internalCallbacksMutex.Unlock()
+		return
+	}
+	gs.internalCallbacksMutex.Unlock()
+
 	got := make(chan bool, 1)
 
 	// Cleanup function
-	onGot := func() {
-		// Unregister the callback function
+	onGot := func(data []byte, err error) {
 		gs.internalCallbacksMutex.Lock()
-		delete(gs.internalCallbacks, *key)
-		gs.internalCallbacksMutex.Unlock()
+		defer gs.internalCallbacksMutex.Unlock()
 
-		got <- true
+		if _, ok := gs.internalCallbacks[keyStr]; !ok {
+			// We already removed the callback, this was a race condition
+			got <- true
+			return
+		}
+
+		// Unregister the callback function
+		delete(gs.internalCallbacks, keyStr)
+
+		// Send the data back
+		result <- data
+		errChan <- err
 
 		close(result)
-		close(err)
+		close(errChan)
+
+		got <- true
 	}
 
 	// Register a callback for the message we want
 	gs.internalCallbacksMutex.Lock()
-	gs.internalCallbacks[*key] = func(conn network.Connection, header *gamenet.PacketHeader, data []byte) {
-		log.Printf("Callback (%v): Got packet from %s with type %d", *key, conn.Addr().String(), header.PacketType)
-
+	gs.internalCallbacks[keyStr] = func(conn network.Connection, header *gamenet.PacketHeader, data []byte) {
 		if header.PacketType == key.Message {
-			result <- data
-			onGot()
+			log.Printf("Callback (%s): Got packet from %s with type %d", keyStr, conn.Addr().String(), header.PacketType)
+			onGot(data, nil)
 		}
 	}
 	gs.internalCallbacksMutex.Unlock()
@@ -163,11 +210,10 @@ func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey
 	go func() {
 		<-ctx.Done()
 		select {
-		case <-err:
+		case <-errChan:
 			return
 		default:
-			err <- ctx.Err()
-			onGot()
+			onGot(nil, ctx.Err())
 		}
 	}()
 
@@ -184,6 +230,19 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			return
 		}
 
+		// Check if we're already waiting, take a lock otherwise
+		gs.instanceCreationWaitersMutex.Lock()
+		defer gs.instanceCreationWaitersMutex.Unlock()
+
+		if _, ok := gs.instanceCreationWaiters[addr.String()]; ok {
+			return
+		}
+
+		gs.instanceCreationWaiters[addr.String()] = true
+		defer func() {
+			delete(gs.instanceCreationWaiters, addr.String())
+		}()
+
 		// Prepare to wait up to 3 seconds for a server response
 		ctx := context.Background()
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -192,8 +251,17 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 		// Forward the request
 		serverInfo, playerInfo, err := gs.Instances.AskInfo(&askInfo, gs, ctx)
 		if err != nil {
-			log.Println(err)
-			return
+			// Get/create an instance and retry
+			gs.Instances.GetOrCreateOpenInstance(gs.Server, gs)
+
+			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+			serverInfo, playerInfo, err = gs.Instances.AskInfo(&askInfo, gs, ctx)
+			if err != nil {
+				log.Println(err)
+				return
+			}
 		}
 
 		// Overwrite the server name with our motd
@@ -235,7 +303,20 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 
 			var clientAddr net.Addr = addr // The sender's address, renamed here for clarity.
 
-			// The message is from a player, get or create an open instance
+			// Check if we're already waiting to join, take a lock otherwise
+			gs.instanceJoinWaitersMutex.Lock()
+			defer gs.instanceJoinWaitersMutex.Unlock()
+
+			if _, ok := gs.instanceJoinWaiters[addr.String()]; ok {
+				return
+			}
+
+			gs.instanceJoinWaiters[addr.String()] = true
+			defer func() {
+				delete(gs.instanceJoinWaiters, addr.String())
+			}()
+
+			// Get or create an open instance
 			inst, err := gs.Instances.GetOrCreateOpenInstance(gs.Server, gs)
 			if err != nil {
 				log.Println(err)
