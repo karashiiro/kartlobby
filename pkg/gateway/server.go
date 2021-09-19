@@ -91,7 +91,8 @@ func (gs *GatewayServer) Run() error {
 		//
 		// Regardless of that, this returns an error showing that the
 		// buffer is too small when the server sends that packet, so
-		// we're just going to allocate double that amount.
+		// we're just going to allocate double that amount. The packet
+		// actually comes out to 1160 bytes, for some reason.
 		data := make([]byte, 2048)
 		n, addr, err := gs.Server.ReadFrom(data)
 		if err != nil {
