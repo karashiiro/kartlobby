@@ -13,7 +13,7 @@ in order to balance players across all rooms.
  - [x] Launching new instances automatically
  - [x] Closing dead instances
  - [x] Configuration file
- - [ ] Sane colored server name support
+ - [x] Sane colored server name support
  - [ ] Load testing
  - [ ] TBD
 
