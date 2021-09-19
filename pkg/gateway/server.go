@@ -34,10 +34,10 @@ type GatewayServer struct {
 	internalCallbacksMutex *sync.Mutex
 
 	// Clients waiting for an instance to be created
-	instanceCreationWaitTable *WaitTable
+	instanceCreationWaitTable *waitTable
 
 	// Clients waiting to join an instance
-	instanceJoinWaitTable *WaitTable
+	instanceJoinWaitTable *waitTable
 }
 
 type GatewayOptions struct {
@@ -66,8 +66,8 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		internalCallbacks:      make(map[string]func(network.Connection, *gamenet.PacketHeader, []byte)),
 		internalCallbacksMutex: &sync.Mutex{},
 
-		instanceCreationWaitTable: NewWaitTable(),
-		instanceJoinWaitTable:     NewWaitTable(),
+		instanceCreationWaitTable: newWaitTable(),
+		instanceJoinWaitTable:     newWaitTable(),
 	}
 
 	return &gs, nil
