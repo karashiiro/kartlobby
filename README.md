@@ -10,7 +10,8 @@ in order to balance players across all rooms.
  - [x] Launching instances manually
  - [x] Away node PT_ASKINFO
  - [x] Joining active instances
- - [ ] Launching new instances automatically
+ - [x] Launching new instances automatically
+ - [ ] Closing dead instances
  - [ ] TBD
 
 ## Usage
