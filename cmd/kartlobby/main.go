@@ -30,7 +30,7 @@ func runApplicationLoop(fn func() error, errChan chan error) {
 }
 
 func main() {
-	// Load
+	// Load configuration
 	var config Configuration
 	err := configor.Load(&config, "config.yml")
 	if err != nil {
