@@ -214,7 +214,7 @@ func (gi *GameInstance) ShouldClose(server UDPServer, ctx context.Context) (bool
 		return false, err
 	}
 
-	if !creationTime.Before(time.Now().Add(-5 * time.Minute)) {
+	if !creationTime.Before(time.Now().Add(-2 * time.Minute)) {
 		// This is a new instance
 		return false, nil
 	}
@@ -238,4 +238,9 @@ func (gi *GameInstance) ShouldClose(server UDPServer, ctx context.Context) (bool
 	}
 
 	return false, nil
+}
+
+func (gi *GameInstance) Stop() error {
+	timeout := 3 * time.Second
+	return gi.client.ContainerStop(context.Background(), gi.id, &timeout)
 }

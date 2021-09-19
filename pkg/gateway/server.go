@@ -76,6 +76,8 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 // Close shuts down the server, sending a PT_SERVERSHUTDOWN to all
 // connected clients.
 func (gs *GatewayServer) Close() {
+	gs.Instances.Close()
+
 	if gs.Server == nil {
 		return
 	}
@@ -95,6 +97,33 @@ func (gs *GatewayServer) Run() error {
 		return err
 	}
 	gs.Server = server
+
+	// Start container stop checker
+	go gs.Instances.Reaper(gs, func(addr string) {
+		// Callback when an instance is stopped
+		gs.clientsMutex.Lock()
+		defer gs.clientsMutex.Unlock()
+
+		clientsToRemove := make([]string, 0)
+
+		// Stop any connections involving the stopped instance
+		for cAddr, proxy := range gs.clients {
+			if proxy.gameConn.Addr().String() == addr {
+				err := proxy.Close()
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				clientsToRemove = append(clientsToRemove, cAddr)
+			}
+		}
+
+		// Remove all connections we stopped from our proxy map
+		for _, cAddr := range clientsToRemove {
+			delete(gs.clients, cAddr)
+		}
+	})
 
 	for {
 		// PT_SERVERINFO should be the largest packet at 1024 bytes.
@@ -195,7 +224,6 @@ func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey
 	gs.internalCallbacksMutex.Lock()
 	gs.internalCallbacks[keyStr] = func(conn network.Connection, header *gamenet.PacketHeader, data []byte) {
 		if header.PacketType == key.Message {
-			log.Printf("Callback (%s): Got packet from %s with type %d", keyStr, conn.Addr().String(), header.PacketType)
 			onGot(data, nil)
 		}
 	}
@@ -326,7 +354,7 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 				return
 			}
 
-			// TODO: This is an untracked goroutine and therefore potentially error-prone
+			// Run the proxy server
 			go proxy.Run()
 
 			// Store the proxy for future packets

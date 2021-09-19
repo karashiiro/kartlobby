@@ -19,6 +19,7 @@ type GameInstanceManager struct {
 	instances               map[string]*GameInstance
 	instanceGetOrCreateLock *sync.Mutex
 	instanceCreateLock      *sync.Mutex
+	reaperRunning           bool
 }
 
 func NewManager(maxInstances int) *GameInstanceManager {
@@ -28,9 +29,73 @@ func NewManager(maxInstances int) *GameInstanceManager {
 		instances:               make(map[string]*GameInstance),
 		instanceGetOrCreateLock: &sync.Mutex{},
 		instanceCreateLock:      &sync.Mutex{},
+		reaperRunning:           false,
 	}
 
 	return &m
+}
+
+// Reaper runs a blocking loop that cleans up dead instances. A function may be
+// optionally provided to run a callback when an instance is stopped. This callback
+// takes the server's address as its first argument.
+func (m *GameInstanceManager) Reaper(server UDPServer, stopFn func(string)) {
+	m.reaperRunning = true
+	for m.reaperRunning {
+		instancesToRemove := make([]string, 0)
+
+		for addr, inst := range m.instances {
+			if !m.reaperRunning {
+				break
+			}
+
+			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+
+			// Check if the instance should be stopped
+			shouldClose, err := inst.ShouldClose(server, ctx)
+			if err != nil {
+				log.Println(err)
+				cancel()
+				continue
+			}
+
+			// Close and remove the instance if it should be stopped
+			if shouldClose {
+				err := inst.Stop()
+				if err != nil {
+					log.Println(err)
+					cancel()
+					continue
+				}
+
+				if stopFn != nil {
+					stopFn(addr)
+				}
+
+				// Add this to our list to remove from the map
+				instancesToRemove = append(instancesToRemove, addr)
+
+				log.Printf("Stopped container %s", inst.id)
+			}
+
+			cancel()
+		}
+
+		// Remove stopped instances from our map
+		m.instanceCreateLock.Lock()
+		for _, addr := range instancesToRemove {
+			delete(m.instances, addr)
+			m.numInstances--
+		}
+		m.instanceCreateLock.Unlock()
+
+		time.Sleep(3 * time.Second)
+	}
+}
+
+// Close stops the reaper loop.
+func (m *GameInstanceManager) Close() {
+	m.reaperRunning = false
 }
 
 // AskInfo sends a PT_ASKINFO request to the game server behind the first available instance we're tracking,

@@ -9,9 +9,10 @@ import (
 )
 
 type gameProxy struct {
-	playerConn network.Connection
-	gameConn   network.Connection
-	proxy      *net.UDPConn
+	playerConn   network.Connection
+	gameConn     network.Connection
+	proxy        *net.UDPConn
+	proxyRunning bool
 }
 
 func newGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance) (*gameProxy, error) {
@@ -36,12 +37,23 @@ func newGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance
 	}, nil
 }
 
+func (u *gameProxy) Close() error {
+	u.proxyRunning = false
+	return u.proxy.Close()
+}
+
 func (u *gameProxy) Run() {
+	u.proxyRunning = true
+
 	var proxyData [2048]byte
-	for {
+	for u.proxyRunning {
 		// Read packet from the game
 		n, _, err := u.proxy.ReadFrom(proxyData[:])
 		if err != nil {
+			if !u.proxyRunning {
+				break
+			}
+
 			log.Println(err)
 			continue
 		}

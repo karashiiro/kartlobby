@@ -11,7 +11,7 @@ in order to balance players across all rooms.
  - [x] Away node PT_ASKINFO
  - [x] Joining active instances
  - [x] Launching new instances automatically
- - [ ] Closing dead instances
+ - [x] Closing dead instances
  - [ ] Configuration file
  - [ ] Load testing
  - [ ] TBD
