@@ -5,12 +5,14 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
+	"github.com/karashiiro/kartlobby/pkg/doom"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
@@ -194,4 +196,46 @@ func (gi *GameInstance) AskInfo(askInfo *gamenet.AskInfoPak, server UDPServer, c
 	}
 
 	return &serverInfo, &playerInfo, nil
+}
+
+// ShouldClose returns true if the instance has been active for more than a few minutes
+// and has no players. A timeout context should always be provided in order to
+// prevent an application hang in the event that the server doesn't respond.
+func (gi *GameInstance) ShouldClose(server UDPServer, ctx context.Context) (bool, error) {
+	inspect, err := gi.client.ContainerInspect(ctx, gi.id)
+	if err != nil {
+		// This is probably something we should be aware of, return the error
+		return false, err
+	}
+
+	// Parse the creation time
+	creationTime, err := time.Parse(time.RFC3339, inspect.Created)
+	if err != nil {
+		return false, err
+	}
+
+	if !creationTime.Before(time.Now().Add(-5 * time.Minute)) {
+		// This is a new instance
+		return false, nil
+	}
+
+	// Get the instance's player info
+	si, _, err := gi.AskInfo(&gamenet.AskInfoPak{
+		PacketHeader: gamenet.PacketHeader{
+			PacketType: gamenet.PT_ASKINFO,
+		},
+		Version: doom.VERSION,
+		Time:    uint32(time.Now().Unix()),
+	}, server, ctx)
+	if err != nil {
+		// The server has stopped responding
+		return true, nil
+	}
+
+	if si.NumberOfPlayer == 0 {
+		// No players
+		return true, nil
+	}
+
+	return false, nil
 }

@@ -95,7 +95,7 @@ func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server 
 		defer cancel()
 
 		// Get the player info from the server
-		_, pi, err := inst.AskInfo(&gamenet.AskInfoPak{
+		si, _, err := inst.AskInfo(&gamenet.AskInfoPak{
 			PacketHeader: gamenet.PacketHeader{
 				PacketType: gamenet.PT_ASKINFO,
 			},
@@ -108,20 +108,10 @@ func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server 
 			continue
 		}
 
-		// Check the number of players
-		instPlayers := 0
-		for i := 0; i < len(pi.Players); i++ {
-			if pi.Players[i].Node == 255 {
-				break
-			}
-
-			instPlayers++
-		}
-
 		// We want the instance with the fewest players
-		if instance == nil || instPlayers < instancePlayers {
+		if instance == nil || int(si.NumberOfPlayer) < instancePlayers {
 			instance = inst
-			instancePlayers = instPlayers
+			instancePlayers = int(si.NumberOfPlayer)
 		}
 	}
 
