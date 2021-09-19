@@ -18,7 +18,6 @@ type GatewayServer struct {
 	Server    *net.UDPConn
 
 	port         int
-	maxClients   int
 	maxInstances int
 	broadcast    *network.BroadcastConnection
 	motd         motd.Motd
@@ -34,19 +33,22 @@ type GatewayServer struct {
 
 type GatewayOptions struct {
 	Port         int
-	MaxClients   int
 	MaxInstances int
 	Motd         string
 }
 
-func NewServer(opts *GatewayOptions) *GatewayServer {
+func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
+	broadcast, err := network.NewBroadcastConnection(16)
+	if err != nil {
+		return nil, err
+	}
+
 	gs := GatewayServer{
 		Instances: gameinstance.NewManager(opts.MaxInstances),
 
 		port:         opts.Port,
-		maxClients:   opts.MaxClients,
 		maxInstances: opts.MaxInstances,
-		broadcast:    network.NewBroadcastConnection(opts.MaxClients),
+		broadcast:    broadcast,
 		motd:         motd.New(opts.Motd),
 
 		clients:      make(map[string]*clientInfo),
@@ -55,7 +57,8 @@ func NewServer(opts *GatewayOptions) *GatewayServer {
 		internalCallbacks:      make(map[gameinstance.UDPCallbackKey]func(network.Connection, *gamenet.PacketHeader, []byte)),
 		internalCallbacksMutex: &sync.Mutex{},
 	}
-	return &gs
+
+	return &gs, nil
 }
 
 // Close shuts down the server, sending a PT_SERVERSHUTDOWN to all
@@ -255,6 +258,9 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			// Create the player connection, which forwards messages received from
 			// the proxy to a player
 			playerConn := network.NewUDPConnection(gs.Server, clientAddr)
+
+			// Set the connection so we can broadcast global messages to it
+			gs.broadcast.Set(playerConn)
 
 			// TODO: This is an untracked goroutine and therefore potentially error-prone
 			go func() {

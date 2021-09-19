@@ -29,14 +29,16 @@ func runApplicationLoop(fn func() error, errChan chan error) {
 }
 
 func main() {
-	gs := gateway.NewServer(&gateway.GatewayOptions{
-		Port:       5029,
-		MaxClients: 15,
+	gs, err := gateway.NewServer(&gateway.GatewayOptions{
+		Port: 5029,
 		Motd: colortext.
 			New().
 			AppendTextColored("kartlobby", colortext.Cyan).
 			Build(),
 	})
+	if err != nil {
+		log.Fatalln(err)
+	}
 	defer gs.Close()
 
 	r := rest.NewServer(&rest.RESTServerOptions{
@@ -80,7 +82,7 @@ func main() {
 	go runApplicationLoop(gs.Run, errChan)
 	go runApplicationLoop(r.Run, errChan)
 
-	err := <-errChan
+	err = <-errChan
 	if err != nil {
 		log.Fatalln(err)
 	}

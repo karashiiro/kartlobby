@@ -3,23 +3,29 @@ package network
 import (
 	"errors"
 	"net"
+	"sync"
 )
 
 type BroadcastConnection struct {
 	conns    []Connection
+	setMutex *sync.Mutex
 	numConns int
-	maxConns int
 }
 
 var _ Connection = BroadcastConnection{}
 
-func NewBroadcastConnection(size int) *BroadcastConnection {
-	b := &BroadcastConnection{
-		conns:    make([]Connection, size),
-		numConns: 0,
-		maxConns: size,
+func NewBroadcastConnection(initialSlots int) (*BroadcastConnection, error) {
+	if initialSlots == 0 {
+		return nil, errors.New("initialSlots must be greater than 0")
 	}
-	return b
+
+	b := &BroadcastConnection{
+		conns:    make([]Connection, initialSlots),
+		setMutex: &sync.Mutex{},
+		numConns: 0,
+	}
+
+	return b, nil
 }
 
 func (b BroadcastConnection) Addr() net.Addr {
@@ -36,11 +42,14 @@ func (b BroadcastConnection) Send(data []byte) error {
 }
 
 func (b *BroadcastConnection) Set(conn Connection) error {
-	if b.numConns >= b.maxConns {
-		return errors.New("maximum connection count reached")
+	// If the maximum connection count has been reached
+	if b.numConns == cap(b.conns) {
+		// Double the connections slice
+		b.conns = append(b.conns, make([]Connection, b.numConns)...)
 	}
 
-	// TODO: fix race condition
+	b.setMutex.Lock()
+	defer b.setMutex.Unlock()
 	b.conns[b.numConns] = conn
 	b.numConns++
 
@@ -59,7 +68,8 @@ func (b *BroadcastConnection) Unset(conn Connection) {
 		return
 	}
 
-	// TODO: fix race condition
+	b.setMutex.Lock()
+	defer b.setMutex.Unlock()
 	b.conns[connIdx] = b.conns[b.numConns-1]
 	b.conns[b.numConns-1] = nil
 	b.numConns--
