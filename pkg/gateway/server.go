@@ -34,12 +34,10 @@ type GatewayServer struct {
 	internalCallbacksMutex *sync.Mutex
 
 	// Clients waiting for an instance to be created
-	instanceCreationWaiters      map[string]bool
-	instanceCreationWaitersMutex *sync.Mutex
+	instanceCreationWaitTable *WaitTable
 
 	// Clients waiting to join an instance
-	instanceJoinWaiters      map[string]bool
-	instanceJoinWaitersMutex *sync.Mutex
+	instanceJoinWaitTable *WaitTable
 }
 
 type GatewayOptions struct {
@@ -68,11 +66,8 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		internalCallbacks:      make(map[string]func(network.Connection, *gamenet.PacketHeader, []byte)),
 		internalCallbacksMutex: &sync.Mutex{},
 
-		instanceCreationWaiters:      make(map[string]bool),
-		instanceCreationWaitersMutex: &sync.Mutex{},
-
-		instanceJoinWaiters:      make(map[string]bool),
-		instanceJoinWaitersMutex: &sync.Mutex{},
+		instanceCreationWaitTable: NewWaitTable(),
+		instanceJoinWaitTable:     NewWaitTable(),
 	}
 
 	return &gs, nil
@@ -231,17 +226,14 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 		}
 
 		// Check if we're already waiting, take a lock otherwise
-		gs.instanceCreationWaitersMutex.Lock()
-		defer gs.instanceCreationWaitersMutex.Unlock()
-
-		if _, ok := gs.instanceCreationWaiters[addr.String()]; ok {
+		defer gs.instanceCreationWaitTable.LockUnlock()()
+		if gs.instanceCreationWaitTable.IsSet(addr.String()) {
 			return
 		}
 
-		gs.instanceCreationWaiters[addr.String()] = true
-		defer func() {
-			delete(gs.instanceCreationWaiters, addr.String())
-		}()
+		// This will defer the unset, which will be pushed onto the defer
+		// stack and be called *before* the deferred unlock
+		defer gs.instanceCreationWaitTable.SetUnset(addr.String())()
 
 		// Prepare to wait up to 3 seconds for a server response
 		ctx := context.Background()
@@ -304,17 +296,14 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			var clientAddr net.Addr = addr // The sender's address, renamed here for clarity.
 
 			// Check if we're already waiting to join, take a lock otherwise
-			gs.instanceJoinWaitersMutex.Lock()
-			defer gs.instanceJoinWaitersMutex.Unlock()
-
-			if _, ok := gs.instanceJoinWaiters[addr.String()]; ok {
+			defer gs.instanceJoinWaitTable.LockUnlock()()
+			if gs.instanceJoinWaitTable.IsSet(addr.String()) {
 				return
 			}
 
-			gs.instanceJoinWaiters[addr.String()] = true
-			defer func() {
-				delete(gs.instanceJoinWaiters, addr.String())
-			}()
+			// This will defer the unset, which will be pushed onto the defer
+			// stack and be called *before* the deferred unlock
+			defer gs.instanceJoinWaitTable.SetUnset(addr.String())()
 
 			// Get or create an open instance
 			inst, err := gs.Instances.GetOrCreateOpenInstance(gs.Server, gs)
