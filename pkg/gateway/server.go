@@ -44,6 +44,7 @@ type GatewayOptions struct {
 	Port         int
 	MaxInstances int
 	Motd         string
+	DockerImage  string
 }
 
 func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
@@ -53,7 +54,7 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 	}
 
 	gs := GatewayServer{
-		Instances: gameinstance.NewManager(opts.MaxInstances),
+		Instances: gameinstance.NewManager(opts.MaxInstances, opts.DockerImage),
 
 		port:         opts.Port,
 		maxInstances: opts.MaxInstances,
@@ -97,6 +98,8 @@ func (gs *GatewayServer) Run() error {
 		return err
 	}
 	gs.Server = server
+
+	log.Printf("Gateway server started on port %d with max instances: %d", gs.port, gs.maxInstances)
 
 	// Start container stop checker
 	go gs.Instances.Reaper(gs, func(addr string) {

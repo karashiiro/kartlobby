@@ -12,7 +12,8 @@ in order to balance players across all rooms.
  - [x] Joining active instances
  - [x] Launching new instances automatically
  - [x] Closing dead instances
- - [ ] Configuration file
+ - [x] Configuration file
+ - [ ] Sane colored server name support
  - [ ] Load testing
  - [ ] TBD
 

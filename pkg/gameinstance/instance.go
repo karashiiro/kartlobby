@@ -17,8 +17,6 @@ import (
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
 
-const GAMEIMAGE = "brianallred/srb2kart"
-
 type UDPServer interface {
 	// WaitForMessage waits for a message with the provided opcode from the specified internal port.
 	// This function should always be called with a timeout context in order to avoid hanging.
@@ -39,7 +37,7 @@ type GameInstance struct {
 	port   int
 }
 
-func newInstance(server *net.UDPConn) (*GameInstance, error) {
+func newInstance(server *net.UDPConn, image string) (*GameInstance, error) {
 	ctx := context.Background()
 	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -57,7 +55,7 @@ func newInstance(server *net.UDPConn) (*GameInstance, error) {
 		AttachStdout: true,
 		AttachStderr: true,
 		Tty:          true,
-		Image:        GAMEIMAGE,
+		Image:        image,
 	}, &container.HostConfig{
 		PortBindings: nat.PortMap{
 			// Bind 5029/udp in the container to our free port on the host

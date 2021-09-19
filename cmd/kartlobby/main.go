@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/jinzhu/configor"
 	"github.com/karashiiro/kartlobby/pkg/colortext"
 	"github.com/karashiiro/kartlobby/pkg/doom"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
@@ -29,21 +30,31 @@ func runApplicationLoop(fn func() error, errChan chan error) {
 }
 
 func main() {
+	// Load
+	var config Configuration
+	err := configor.Load(&config, "config.yml")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Create gateway server
 	gs, err := gateway.NewServer(&gateway.GatewayOptions{
-		Port:         5029,
-		MaxInstances: 1,
+		Port:         config.GatewayPort,
+		MaxInstances: config.MaxRooms,
 		Motd: colortext.
 			New().
 			AppendTextColored("kartlobby", colortext.Cyan).
 			Build(),
+		DockerImage: config.DockerImage,
 	})
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer gs.Close()
 
+	// Create API
 	r := rest.NewServer(&rest.RESTServerOptions{
-		Port: 5030,
+		Port: config.APIPort,
 	})
 
 	r.Get("/new", func() (interface{}, error) {
