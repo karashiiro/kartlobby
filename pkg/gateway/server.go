@@ -170,7 +170,7 @@ func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey
 	<-got
 }
 
-func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr, header *gamenet.PacketHeader, data []byte, n int) {
+func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, header *gamenet.PacketHeader, data []byte, n int) {
 	switch header.PacketType {
 	case gamenet.PT_ASKINFO:
 		askInfo := gamenet.AskInfoPak{}
@@ -229,7 +229,7 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr *net.UDPAddr
 			// the connections in the client info with a *new* UDP server with a
 			// port distinguished for this purpose.
 
-			var clientAddr *net.UDPAddr = addr // The sender's address, renamed here for clarity.
+			var clientAddr net.Addr = addr // The sender's address, renamed here for clarity.
 
 			// The message is from a player, get or create an open instance
 			inst, err := gs.Instances.GetOrCreateOpenInstance(gs.Server, gs)
