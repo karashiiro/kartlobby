@@ -14,7 +14,7 @@ in order to balance players across all rooms.
  - [x] Closing dead instances
  - [x] Configuration file
  - [x] Sane colored server name support
- - [ ] Add support for mounting container volumes
+ - [x] Add support for mounting config and addon volumes (Maybe? I can't tell if it mounted correctly.)
  - [ ] Load testing
  - [ ] TBD
 

@@ -21,12 +21,22 @@ type GameInstanceManager struct {
 	instanceCreateLock      *sync.Mutex
 	reaperRunning           bool
 	image                   string
+	configPath              string
+	addonPath               string
+}
+
+type GameInstanceManagerOptions struct {
+	MaxInstances   int
+	DockerImage    string
+	GameConfigPath string
+	GameAddonPath  string
 }
 
 // NewManager creates a new game instance manager. The maxInstances parameter controls
 // how many rooms may exist at one time. Setting this to -1 (not recommended) will
 // effectively uncap the instance limit.
-func NewManager(maxInstances int, image string) *GameInstanceManager {
+func NewManager(opts *GameInstanceManagerOptions) *GameInstanceManager {
+	maxInstances := opts.MaxInstances
 	if maxInstances == -1 {
 		maxInstances = math.MaxInt
 	}
@@ -38,7 +48,9 @@ func NewManager(maxInstances int, image string) *GameInstanceManager {
 		instanceGetOrCreateLock: &sync.Mutex{},
 		instanceCreateLock:      &sync.Mutex{},
 		reaperRunning:           false,
-		image:                   image,
+		image:                   opts.DockerImage,
+		configPath:              opts.GameConfigPath,
+		addonPath:               opts.GameAddonPath,
 	}
 
 	return &m
@@ -135,7 +147,7 @@ func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, 
 	}
 
 	// Create a new instance
-	newInstance, err := newInstance(conn, m.image)
+	newInstance, err := newInstance(conn, m.image, m.configPath, m.addonPath)
 	if err != nil {
 		return nil, err
 	}

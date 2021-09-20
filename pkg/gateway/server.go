@@ -41,10 +41,12 @@ type GatewayServer struct {
 }
 
 type GatewayOptions struct {
-	Port         int
-	MaxInstances int
-	Motd         string
-	DockerImage  string
+	Port           int
+	MaxInstances   int
+	Motd           string
+	DockerImage    string
+	GameConfigPath string
+	GameAddonPath  string
 }
 
 func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
@@ -54,7 +56,12 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 	}
 
 	gs := GatewayServer{
-		Instances: gameinstance.NewManager(opts.MaxInstances, opts.DockerImage),
+		Instances: gameinstance.NewManager(&gameinstance.GameInstanceManagerOptions{
+			MaxInstances:   opts.MaxInstances,
+			DockerImage:    opts.DockerImage,
+			GameConfigPath: opts.GameConfigPath,
+			GameAddonPath:  opts.GameAddonPath,
+		}),
 
 		port:         opts.Port,
 		maxInstances: opts.MaxInstances,

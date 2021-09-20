@@ -9,6 +9,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ type GameInstance struct {
 	port   int
 }
 
-func newInstance(server *net.UDPConn, image string) (*GameInstance, error) {
+func newInstance(server *net.UDPConn, image string, configPath string, addonPath string) (*GameInstance, error) {
 	ctx := context.Background()
 	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -48,6 +49,24 @@ func newInstance(server *net.UDPConn, image string) (*GameInstance, error) {
 	port, err := network.GetFreePort()
 	if err != nil {
 		return nil, err
+	}
+
+	// Set up volume mapping
+	mounts := make([]mount.Mount, 0)
+	if configPath != "" {
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeVolume,
+			Source: configPath,
+			Target: "/config",
+		})
+	}
+
+	if addonPath != "" {
+		mounts = append(mounts, mount.Mount{
+			Type:   mount.TypeVolume,
+			Source: addonPath,
+			Target: "/addons",
+		})
 	}
 
 	// Create the container
@@ -63,6 +82,7 @@ func newInstance(server *net.UDPConn, image string) (*GameInstance, error) {
 				HostPort: fmt.Sprint(port),
 			}},
 		},
+		Mounts: mounts,
 	}, nil, nil, "")
 	if err != nil {
 		return nil, err

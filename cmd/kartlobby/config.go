@@ -7,4 +7,7 @@ type Configuration struct {
 	Motd        string
 	MaxRooms    int    `default:"1"`
 	DockerImage string `default:"brianallred/srb2kart"`
+
+	GameConfig string
+	GameAddons string
 }

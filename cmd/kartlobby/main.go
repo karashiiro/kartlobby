@@ -54,10 +54,12 @@ func main() {
 
 	// Create gateway server
 	gs, err := gateway.NewServer(&gateway.GatewayOptions{
-		Port:         config.GatewayPort,
-		MaxInstances: config.MaxRooms,
-		Motd:         motd,
-		DockerImage:  config.DockerImage,
+		Port:           config.GatewayPort,
+		MaxInstances:   config.MaxRooms,
+		Motd:           motd,
+		DockerImage:    config.DockerImage,
+		GameConfigPath: config.GameConfig,
+		GameAddonPath:  config.GameAddons,
 	})
 	if err != nil {
 		log.Fatalln(err)
