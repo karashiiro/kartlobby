@@ -1,7 +1,8 @@
 package colortext
 
 // Parse parses colored text from a string. The input is expected to be a normal string with
-// colored portions prefixed with "<color>", replacing "color" with the desired actual color.
+// colored portions prefixed with "{color}", replacing "color" with the desired actual color.
+// Accordingly, the "{}" characters may not be used as regular characters.
 func Parse(text string) string {
 	b := New()
 
@@ -9,11 +10,11 @@ func Parse(text string) string {
 	currentColorStr := ""
 	currentColor := None
 	for _, c := range text {
-		if c == '<' {
+		if c == '{' {
 			// Tag open
 			readingColor = true
 			continue
-		} else if c == '>' {
+		} else if c == '}' {
 			// Tag close
 			readingColor = false
 
