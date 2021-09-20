@@ -55,7 +55,7 @@ func newInstance(server *net.UDPConn, image string, configPath string, addonPath
 	mounts := make([]mount.Mount, 0)
 	if configPath != "" {
 		mounts = append(mounts, mount.Mount{
-			Type:   mount.TypeVolume,
+			Type:   mount.TypeBind,
 			Source: configPath,
 			Target: "/config",
 		})
@@ -63,7 +63,7 @@ func newInstance(server *net.UDPConn, image string, configPath string, addonPath
 
 	if addonPath != "" {
 		mounts = append(mounts, mount.Mount{
-			Type:   mount.TypeVolume,
+			Type:   mount.TypeBind,
 			Source: addonPath,
 			Target: "/addons",
 		})
