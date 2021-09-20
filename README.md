@@ -17,6 +17,7 @@ in order to balance players across all rooms.
  - [x] Add support for mounting config and addon volumes (Maybe? I can't tell if it mounted correctly.)
  - [ ] Connection persistence through quick restarts ([#5](https://github.com/karashiiro/kartlobby/issues/5))
  - [ ] Waiting player handling ([#7](https://github.com/karashiiro/kartlobby/issues/7))
+ - [ ] Ban list syncing ([#2](https://github.com/karashiiro/kartlobby/issues/2))
  - [ ] Load testing
  - [ ] Master Server support
  - [ ] TBD
