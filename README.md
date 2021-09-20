@@ -16,7 +16,6 @@ in order to balance players across all rooms.
  - [x] Sane colored server name support
  - [x] Add support for mounting config and addon volumes (Maybe? I can't tell if it mounted correctly.)
  - [ ] Connection persistence through quick restarts ([#5](https://github.com/karashiiro/kartlobby/issues/5))
- - [ ] Proxy connection pooling ([#10](https://github.com/karashiiro/kartlobby/issues/10))
  - [ ] Waiting player handling ([#7](https://github.com/karashiiro/kartlobby/issues/7))
  - [ ] Load testing
  - [ ] Master Server support
