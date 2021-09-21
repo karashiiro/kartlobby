@@ -63,6 +63,8 @@ func (p *gameProxy) HydrateDeserialized(gatewayServer *net.UDPConn) error {
 	p.gameConn = network.NewUDPConnection(proxy, p.gameAddr)
 	p.proxy = proxy
 
+	go p.Run()
+
 	return nil
 }
 
@@ -91,24 +93,24 @@ func newGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance
 	}, nil
 }
 
-func (u *gameProxy) Close() error {
-	u.proxyRunning = false
-	return u.proxy.Close()
+func (p *gameProxy) Close() error {
+	p.proxyRunning = false
+	return p.proxy.Close()
 }
 
-func (u *gameProxy) Run() {
-	if u.proxyRunning {
+func (p *gameProxy) Run() {
+	if p.proxyRunning {
 		return
 	}
 
-	u.proxyRunning = true
+	p.proxyRunning = true
 
 	var proxyData [2048]byte
-	for u.proxyRunning {
+	for p.proxyRunning {
 		// Read packet from the game
-		n, _, err := u.proxy.ReadFrom(proxyData[:])
+		n, _, err := p.proxy.ReadFrom(proxyData[:])
 		if err != nil {
-			if !u.proxyRunning {
+			if !p.proxyRunning {
 				break
 			}
 
@@ -117,7 +119,7 @@ func (u *gameProxy) Run() {
 		}
 
 		// Forward packet to the client
-		err = u.playerConn.Send(proxyData[:n])
+		err = p.playerConn.Send(proxyData[:n])
 		if err != nil {
 			log.Println(err)
 		}
