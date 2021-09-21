@@ -27,8 +27,6 @@ in order to balance players across all rooms.
 ## Usage
 Run `pull_image.sh` to pull the latest Docker image. If the game ever updates, run it again to update the image to the latest version.
 
-TODO: Maintain own Docker image rather than relying on [BrianAllred/srb2kart](https://github.com/BrianAllred/srb2kart).
-
 ## Configuration
 The application comes preconfigured, but you can customize its configuration by creating a `config.yml` in the same directory as the program,
 or by starting the application with `-config CONFIGPATH`, replacing `CONFIGPATH` with a path to your configuration file.
