@@ -71,6 +71,7 @@ func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
 		return err
 	}
 
+	m.instances = make(map[string]*GameInstance)
 	for addr, instSerialized := range o.Instances {
 		inst := &GameInstance{}
 		err := inst.DeserializeSelf([]byte(instSerialized))
@@ -81,12 +82,17 @@ func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
 		m.instances[addr] = inst
 	}
 
+	m.instanceGetOrCreateLock = &sync.Mutex{}
+	m.instanceCreateLock = &sync.Mutex{}
 	m.client = client
 
 	return nil
 }
 
-func (m *GameInstanceManager) HydrateDeserialized(server *net.UDPConn) {
+func (m *GameInstanceManager) HydrateDeserialized(server *net.UDPConn, image, configPath, addonPath string) {
+	m.image = image
+	m.configPath = configPath
+	m.addonPath = addonPath
 	for _, inst := range m.instances {
 		inst.HydrateDeserialized(m.client, server)
 	}
