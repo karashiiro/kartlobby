@@ -24,8 +24,10 @@ require (
 )
 
 require (
+	github.com/adelowo/onecache v0.0.0-20200525154227-4af24e41db10
 	github.com/andybalholm/brotli v1.0.2 // indirect
 	github.com/google/uuid v1.3.0
+	github.com/jinzhu/configor v1.2.1
 	github.com/klauspost/compress v1.13.4 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
@@ -35,6 +37,6 @@ require (
 
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
-	github.com/jinzhu/configor v1.2.1 // indirect
+	github.com/go-redis/redis v6.14.0+incompatible
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
