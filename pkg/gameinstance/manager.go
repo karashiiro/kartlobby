@@ -55,6 +55,7 @@ func (m *GameInstanceManager) SerializeSelf() ([]byte, error) {
 	}
 
 	for addr, inst := range m.instances {
+		// Serialize each game instance
 		instSerialized, err := inst.SerializeSelf()
 		if err != nil {
 			return nil, err
@@ -74,6 +75,7 @@ func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
 		return err
 	}
 
+	// Create the Docker client
 	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return err
@@ -81,6 +83,7 @@ func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
 
 	m.instances = make(map[string]*GameInstance)
 	for addr, instSerialized := range o.Instances {
+		// Deserialize each game instance
 		inst := &GameInstance{}
 		err := inst.DeserializeSelf([]byte(instSerialized))
 		if err != nil {
