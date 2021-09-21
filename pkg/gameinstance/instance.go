@@ -38,12 +38,8 @@ type GameInstance struct {
 	port   int
 }
 
-func newInstance(server *net.UDPConn, image string, configPath string, addonPath string) (*GameInstance, error) {
+func newInstance(client *client.Client, server *net.UDPConn, image string, configPath string, addonPath string) (*GameInstance, error) {
 	ctx := context.Background()
-	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, err
-	}
 
 	// Get a free port
 	port, err := network.GetFreePort()

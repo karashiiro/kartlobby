@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/client"
 	"github.com/karashiiro/kartlobby/pkg/doom"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 )
@@ -19,6 +20,7 @@ type GameInstanceManager struct {
 	instances               map[string]*GameInstance
 	instanceGetOrCreateLock *sync.Mutex
 	instanceCreateLock      *sync.Mutex
+	client                  *client.Client
 	reaperRunning           bool
 	image                   string
 	configPath              string
@@ -35,10 +37,15 @@ type GameInstanceManagerOptions struct {
 // NewManager creates a new game instance manager. The maxInstances parameter controls
 // how many rooms may exist at one time. Setting this to -1 (not recommended) will
 // effectively uncap the instance limit.
-func NewManager(opts *GameInstanceManagerOptions) *GameInstanceManager {
+func NewManager(opts *GameInstanceManagerOptions) (*GameInstanceManager, error) {
 	maxInstances := opts.MaxInstances
 	if maxInstances == -1 {
 		maxInstances = math.MaxInt
+	}
+
+	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, err
 	}
 
 	m := GameInstanceManager{
@@ -47,13 +54,14 @@ func NewManager(opts *GameInstanceManagerOptions) *GameInstanceManager {
 		instances:               make(map[string]*GameInstance),
 		instanceGetOrCreateLock: &sync.Mutex{},
 		instanceCreateLock:      &sync.Mutex{},
+		client:                  client,
 		reaperRunning:           false,
 		image:                   opts.DockerImage,
 		configPath:              opts.GameConfigPath,
 		addonPath:               opts.GameAddonPath,
 	}
 
-	return &m
+	return &m, nil
 }
 
 // Reaper runs a blocking loop that cleans up dead instances. A function may be
@@ -147,7 +155,7 @@ func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, 
 	}
 
 	// Create a new instance
-	newInstance, err := newInstance(conn, m.image, m.configPath, m.addonPath)
+	newInstance, err := newInstance(m.client, conn, m.image, m.configPath, m.addonPath)
 	if err != nil {
 		return nil, err
 	}

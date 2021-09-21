@@ -55,13 +55,18 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		return nil, err
 	}
 
+	instanceManager, err := gameinstance.NewManager(&gameinstance.GameInstanceManagerOptions{
+		MaxInstances:   opts.MaxInstances,
+		DockerImage:    opts.DockerImage,
+		GameConfigPath: opts.GameConfigPath,
+		GameAddonPath:  opts.GameAddonPath,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	gs := GatewayServer{
-		Instances: gameinstance.NewManager(&gameinstance.GameInstanceManagerOptions{
-			MaxInstances:   opts.MaxInstances,
-			DockerImage:    opts.DockerImage,
-			GameConfigPath: opts.GameConfigPath,
-			GameAddonPath:  opts.GameAddonPath,
-		}),
+		Instances: instanceManager,
 
 		port:         opts.Port,
 		maxInstances: opts.MaxInstances,
