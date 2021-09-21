@@ -350,12 +350,9 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			return
 		}
 	default:
-		var proxy *gameproxy.GameProxy
-		if knownProxy, err := gs.Proxies.GetProxy(conn.Addr().String()); err == nil {
-			proxy = knownProxy
-		} else {
-			defer gs.Proxies.LockUnlock()()
+		proxy, err := gs.Proxies.GetProxy(conn.Addr().String())
 
+		if err != nil {
 			// Create a new map entry to forward this player's packets to a server.
 			//
 			// We need to make sure that the server reads the sender IP field
@@ -390,15 +387,17 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			gs.broadcast.Set(playerConn)
 
 			// Start a new UDP server to proxy through
-			proxy, err = gs.Proxies.CreateProxy(playerConn, inst, conn.Addr().String())
+			_, err = gs.Proxies.CreateProxy(playerConn, inst, conn.Addr().String())
 			if err != nil {
 				log.Println(err)
 				return
 			}
-		}
 
+			// Don't send this packet in addition to waiting packets
+			return
+		}
 		// Forward packet to the game
-		err := proxy.SendToGame(data[:n])
+		err = proxy.SendToGame(data[:n])
 		if err != nil {
 			log.Println(err)
 			return

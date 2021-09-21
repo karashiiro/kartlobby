@@ -30,12 +30,10 @@ func (m *GameProxyManager) GetProxy(addr string) (*GameProxy, error) {
 	return nil, errors.New("no proxy matches the provided address")
 }
 
-func (m *GameProxyManager) LockUnlock() func() {
-	m.clientsMutex.Lock()
-	return m.clientsMutex.Unlock
-}
-
 func (m *GameProxyManager) CreateProxy(playerConn network.Connection, inst *gameinstance.GameInstance, addr string) (*GameProxy, error) {
+	m.clientsMutex.Lock()
+	defer m.clientsMutex.Unlock()
+
 	// Start a new UDP server to proxy through
 	p, err := NewGameProxy(playerConn, inst)
 	if err != nil {
