@@ -39,6 +39,11 @@ func NewCache(addr string) *Cache {
 	}
 }
 
+// Has returns true if the provided key is in the cache.
+func (c *Cache) Has(key string) bool {
+	return c.store.Has(key)
+}
+
 // Set serializes the provided Cacheable and saves it to the cache for the provided
 // amount of time.
 func (c *Cache) Set(key string, o Cacheable, expires time.Duration) error {
