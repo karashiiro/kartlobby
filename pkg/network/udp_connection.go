@@ -7,8 +7,6 @@ type UDPConnection struct {
 	addr   net.Addr
 }
 
-var _ Connection = UDPConnection{}
-
 func NewUDPConnection(server *net.UDPConn, addr net.Addr) Connection {
 	return &UDPConnection{server: server, addr: addr}
 }

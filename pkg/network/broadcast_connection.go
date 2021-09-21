@@ -12,8 +12,6 @@ type BroadcastConnection struct {
 	numConns int
 }
 
-var _ Connection = BroadcastConnection{}
-
 func NewBroadcastConnection(initialSlots int) (*BroadcastConnection, error) {
 	if initialSlots == 0 {
 		return nil, errors.New("initialSlots must be greater than 0")
