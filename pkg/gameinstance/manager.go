@@ -2,6 +2,7 @@ package gameinstance
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"math"
@@ -13,6 +14,13 @@ import (
 	"github.com/karashiiro/kartlobby/pkg/doom"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 )
+
+type GameInstanceManagerOptions struct {
+	MaxInstances   int
+	DockerImage    string
+	GameConfigPath string
+	GameAddonPath  string
+}
 
 type GameInstanceManager struct {
 	numInstances            int
@@ -27,11 +35,15 @@ type GameInstanceManager struct {
 	addonPath               string
 }
 
-type GameInstanceManagerOptions struct {
-	MaxInstances   int
-	DockerImage    string
-	GameConfigPath string
-	GameAddonPath  string
+type GameInstanceManagerCached struct{}
+
+func (m *GameInstanceManager) SerializeSelf() ([]byte, error) {
+	return json.Marshal(&GameInstanceManagerCached{})
+}
+
+func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
+	o := GameInstanceManagerCached{}
+	return json.Unmarshal(data, &o)
 }
 
 // NewManager creates a new game instance manager. The maxInstances parameter controls
