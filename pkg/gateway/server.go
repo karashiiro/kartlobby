@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/karashiiro/kartlobby/pkg/caching"
 	"github.com/karashiiro/kartlobby/pkg/gameinstance"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 	"github.com/karashiiro/kartlobby/pkg/motd"
@@ -24,6 +25,9 @@ type GatewayServer struct {
 	maxInstances int
 	broadcast    *network.BroadcastConnection
 	motd         motd.Motd
+
+	cache  *caching.Cache
+	gimKey string
 
 	// Connection map from clients to servers
 	clients      map[string]*gameProxy
@@ -41,12 +45,14 @@ type GatewayServer struct {
 }
 
 type GatewayOptions struct {
-	Port           int
-	MaxInstances   int
-	Motd           string
-	DockerImage    string
-	GameConfigPath string
-	GameAddonPath  string
+	Port                        int
+	RedisAddress                string
+	GameInstanceManagerCacheKey string
+	MaxInstances                int
+	Motd                        string
+	DockerImage                 string
+	GameConfigPath              string
+	GameAddonPath               string
 }
 
 func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
@@ -55,23 +61,50 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		return nil, err
 	}
 
-	instanceManager, err := gameinstance.NewManager(&gameinstance.GameInstanceManagerOptions{
-		MaxInstances:   opts.MaxInstances,
-		DockerImage:    opts.DockerImage,
-		GameConfigPath: opts.GameConfigPath,
-		GameAddonPath:  opts.GameAddonPath,
-	})
+	// Create the internal server
+	server, err := net.ListenUDP("udp", &net.UDPAddr{Port: opts.Port})
 	if err != nil {
 		return nil, err
 	}
 
+	// Start the cache client
+	cache := caching.NewCache(opts.RedisAddress)
+
+	// Create/get the instance manager
+	var instanceManager *gameinstance.GameInstanceManager
+	if !cache.Has(opts.GameInstanceManagerCacheKey) {
+		log.Println("Creating instance manager")
+		instanceManager, err = gameinstance.NewManager(&gameinstance.GameInstanceManagerOptions{
+			MaxInstances:   opts.MaxInstances,
+			DockerImage:    opts.DockerImage,
+			GameConfigPath: opts.GameConfigPath,
+			GameAddonPath:  opts.GameAddonPath,
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		log.Println("Restoring instance manager")
+		instanceManager = &gameinstance.GameInstanceManager{}
+		err = cache.Get(opts.GameInstanceManagerCacheKey, instanceManager)
+		if err != nil {
+			return nil, err
+		}
+
+		instanceManager.HydrateDeserialized(server, opts.DockerImage, opts.GameConfigPath, opts.GameAddonPath, opts.MaxInstances)
+	}
+
 	gs := GatewayServer{
 		Instances: instanceManager,
+		Server:    server,
 
 		port:         opts.Port,
 		maxInstances: opts.MaxInstances,
 		broadcast:    broadcast,
 		motd:         motd.New(opts.Motd),
+
+		cache:  cache,
+		gimKey: opts.GameInstanceManagerCacheKey,
 
 		clients:      make(map[string]*gameProxy),
 		clientsMutex: &sync.Mutex{},
@@ -105,13 +138,7 @@ func (gs *GatewayServer) Close() {
 // Run initializes the internal UDP server and blocks, looping while
 // handling UDP messages.
 func (gs *GatewayServer) Run() error {
-	server, err := net.ListenUDP("udp", &net.UDPAddr{Port: gs.port})
-	if err != nil {
-		return err
-	}
-	gs.Server = server
-
-	log.Printf("Gateway server started on port %d with max instances: %d", gs.port, gs.maxInstances)
+	log.Printf("Gateway server running on port %d with max instances: %d and current num instances: %d", gs.port, gs.maxInstances, gs.Instances.GetNumInstances())
 
 	// Start container stop checker
 	go gs.Instances.Reaper(gs, func(addr string) {
@@ -137,6 +164,13 @@ func (gs *GatewayServer) Run() error {
 		// Remove all connections we stopped from our proxy map
 		for _, cAddr := range clientsToRemove {
 			delete(gs.clients, cAddr)
+		}
+
+		// Cache the instance manager
+		log.Println("Caching instance manager")
+		err := gs.cache.Set(gs.gimKey, gs.Instances, 365*24*time.Hour)
+		if err != nil {
+			log.Println(err)
 		}
 	})
 
@@ -258,6 +292,19 @@ func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey
 	<-got
 }
 
+func (gs *GatewayServer) onInstanceStart(addr string) {
+	// Callback when an instance is started
+	gs.clientsMutex.Lock()
+	defer gs.clientsMutex.Unlock()
+
+	// Cache the instance manager
+	log.Println("Caching instance manager")
+	err := gs.cache.Set(gs.gimKey, gs.Instances, 365*24*time.Hour)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, header *gamenet.PacketHeader, data []byte, n int) {
 	switch header.PacketType {
 	case gamenet.PT_ASKINFO:
@@ -287,7 +334,10 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 		serverInfo, playerInfo, err := gs.Instances.AskInfo(&askInfo, gs, ctx)
 		if err != nil {
 			// Get/create an instance and retry
-			gs.Instances.GetOrCreateOpenInstance(gs.Server, gs)
+			_, err := gs.Instances.GetOrCreateOpenInstance(gs.Server, gs, gs.onInstanceStart)
+			if err != nil {
+				log.Println(err)
+			}
 
 			ctx := context.Background()
 			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -349,7 +399,7 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			defer gs.instanceJoinWaitTable.SetUnset(addr.String())()
 
 			// Get or create an open instance
-			inst, err := gs.Instances.GetOrCreateOpenInstance(gs.Server, gs)
+			inst, err := gs.Instances.GetOrCreateOpenInstance(gs.Server, gs, gs.onInstanceStart)
 			if err != nil {
 				log.Println(err)
 				return

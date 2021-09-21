@@ -20,6 +20,14 @@ type GameInstanceManagerOptions struct {
 	DockerImage    string
 	GameConfigPath string
 	GameAddonPath  string
+
+	// Callback function called when an instance is stopped. The first argument
+	// is the address of the instance.
+	OnInstanceStop func(string)
+
+	// Callback function called when an instance is started. The first argument
+	// is the address of the instance.
+	OnInstanceStart func(string)
 }
 
 type GameInstanceManager struct {
@@ -80,6 +88,7 @@ func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
 		}
 
 		m.instances[addr] = inst
+		m.numInstances++
 	}
 
 	m.instanceGetOrCreateLock = &sync.Mutex{}
@@ -89,7 +98,8 @@ func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
 	return nil
 }
 
-func (m *GameInstanceManager) HydrateDeserialized(server *net.UDPConn, image, configPath, addonPath string) {
+func (m *GameInstanceManager) HydrateDeserialized(server *net.UDPConn, image, configPath, addonPath string, maxInstances int) {
+	m.maxInstances = maxInstances
 	m.image = image
 	m.configPath = configPath
 	m.addonPath = addonPath
@@ -128,9 +138,9 @@ func NewManager(opts *GameInstanceManagerOptions) (*GameInstanceManager, error) 
 	return &m, nil
 }
 
-// Reaper runs a blocking loop that cleans up dead instances. A function may be
-// optionally provided to run a callback when an instance is stopped. This callback
-// takes the server's address as its first argument.
+// Reaper runs a blocking loop that cleans up dead instances. A callback
+// function may be provided to be called when an instance is stopped. The
+// first argument is the address of the instance.
 func (m *GameInstanceManager) Reaper(server UDPServer, stopFn func(string)) {
 	if m.reaperRunning {
 		return
@@ -165,10 +175,6 @@ func (m *GameInstanceManager) Reaper(server UDPServer, stopFn func(string)) {
 					continue
 				}
 
-				if stopFn != nil {
-					stopFn(addr)
-				}
-
 				// Add this to our list to remove from the map
 				instancesToRemove = append(instancesToRemove, addr)
 
@@ -183,11 +189,19 @@ func (m *GameInstanceManager) Reaper(server UDPServer, stopFn func(string)) {
 		for _, addr := range instancesToRemove {
 			delete(m.instances, addr)
 			m.numInstances--
+
+			if stopFn != nil {
+				stopFn(addr)
+			}
 		}
 		m.instanceCreateLock.Unlock()
 
 		time.Sleep(3 * time.Second)
 	}
+}
+
+func (m *GameInstanceManager) GetNumInstances() int {
+	return m.numInstances
 }
 
 // Close stops the reaper loop.
@@ -210,8 +224,9 @@ func (m *GameInstanceManager) AskInfo(askInfo *gamenet.AskInfoPak, server UDPSer
 }
 
 // CreateInstance creates a new instance, returning an error if this fails for any reason, including the
-// maximum number of instances already having been created.
-func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, error) {
+// maximum number of instances already having been created. A callback may be provided that gets called
+// when the instance is started.
+func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn, startFn func(string)) (*GameInstance, error) {
 	// Lock here so that concurrent requests don't risk pushing
 	// us over the maximum instance count
 	m.instanceCreateLock.Lock()
@@ -234,14 +249,19 @@ func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn) (*GameInstance, 
 	log.Printf("Created new instance %s on port %d", newInstance.id, newInstance.port)
 	m.numInstances++
 
+	// Run the callback, if it's provided
+	if startFn != nil {
+		startFn(newInstance.Conn.Addr().String())
+	}
+
 	return newInstance, nil
 }
 
 // GetOrCreateOpenInstance gets an open game instance, preferring instances with fewer players
 // in order to balance players across all instances. In the event that this isn't possible, a
 // new instance will be created. If we are already tracking our maximum number of instances,
-// an error is returned.
-func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server UDPServer) (*GameInstance, error) {
+// an error is returned. A callback may be provided that gets called when the instance is started.
+func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server UDPServer, startFn func(string)) (*GameInstance, error) {
 	// We lock here so that if another get/create request occurs that results in an instance being created,
 	// that happens before we attempt to do the same ourselves. Otherwise, many connections occurring at once
 	// could create a bunch of containers and overload the server.
@@ -279,7 +299,7 @@ func (m *GameInstanceManager) GetOrCreateOpenInstance(conn *net.UDPConn, server 
 
 	if instance == nil {
 		// Create a new instance
-		newInstance, err := m.CreateInstance(conn)
+		newInstance, err := m.CreateInstance(conn, startFn)
 		if err != nil {
 			return nil, err
 		}

@@ -14,10 +14,6 @@ import (
 	"github.com/karashiiro/kartlobby/pkg/rest"
 )
 
-type message struct {
-	Msg string `json:"msg"`
-}
-
 type askInfoResponse struct {
 	ServerInfo *gamenet.ServerInfoPak
 	PlayerInfo *gamenet.PlayerInfoPak
@@ -54,12 +50,14 @@ func main() {
 
 	// Create gateway server
 	gs, err := gateway.NewServer(&gateway.GatewayOptions{
-		Port:           config.GatewayPort,
-		MaxInstances:   config.MaxRooms,
-		Motd:           motd,
-		DockerImage:    config.DockerImage,
-		GameConfigPath: config.GameConfig,
-		GameAddonPath:  config.GameAddons,
+		Port:                        config.GatewayPort,
+		RedisAddress:                config.RedisAddress,
+		GameInstanceManagerCacheKey: config.GIMKey,
+		MaxInstances:                config.MaxRooms,
+		Motd:                        motd,
+		DockerImage:                 config.DockerImage,
+		GameConfigPath:              config.GameConfig,
+		GameAddonPath:               config.GameAddons,
 	})
 	if err != nil {
 		log.Fatalln(err)
@@ -69,15 +67,6 @@ func main() {
 	// Create API
 	r := rest.NewServer(&rest.RESTServerOptions{
 		Port: config.APIPort,
-	})
-
-	r.Get("/new", func() (interface{}, error) {
-		_, err := gs.Instances.CreateInstance(gs.Server)
-		if err != nil {
-			return nil, err
-		}
-
-		return &message{Msg: "Success"}, nil
 	})
 
 	r.Get("/askinfo", func() (interface{}, error) {

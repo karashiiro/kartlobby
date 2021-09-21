@@ -44,6 +44,11 @@ func (c *Cache) Has(key string) bool {
 	return c.store.Has(key)
 }
 
+// Delete clears the specified key from the cache.
+func (c *Cache) Delete(key string) error {
+	return c.store.Delete(key)
+}
+
 // Set serializes the provided Cacheable and saves it to the cache for the provided
 // amount of time.
 func (c *Cache) Set(key string, o Cacheable, expires time.Duration) error {
