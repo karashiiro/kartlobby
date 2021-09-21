@@ -6,7 +6,7 @@ the same server by leveraging containers to host multiple servers on the same po
 is started for that player, up to a defined maximum number of rooms. When multiple rooms are active at once, new players will be added to the least-populated room first,
 in order to balance players across all rooms.
 
-*Discord lobby join requests do not work with this application.*
+*Discord lobby join requests are not guaranteed to work properly with this application.*
 
 ## Progress
  - [x] Launching instances manually
