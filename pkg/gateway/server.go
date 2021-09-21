@@ -390,13 +390,13 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 
 			// Check if we're already waiting to join, take a lock otherwise
 			defer gs.instanceJoinWaitTable.LockUnlock()()
-			if gs.instanceJoinWaitTable.IsSet(addr.String()) {
+			if gs.instanceJoinWaitTable.IsSet(clientAddr.String()) {
 				return
 			}
 
 			// This will defer the unset, which will be pushed onto the defer
 			// stack and be called *before* the deferred unlock
-			defer gs.instanceJoinWaitTable.SetUnset(addr.String())()
+			defer gs.instanceJoinWaitTable.SetUnset(clientAddr.String())()
 
 			// Get or create an open instance
 			inst, err := gs.Instances.GetOrCreateOpenInstance(gs.Server, gs, gs.onInstanceStart)
