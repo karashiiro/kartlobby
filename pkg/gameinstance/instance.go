@@ -14,7 +14,6 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
-	"github.com/karashiiro/kartlobby/pkg/caching"
 	"github.com/karashiiro/kartlobby/pkg/doom"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 	"github.com/karashiiro/kartlobby/pkg/network"
@@ -34,14 +33,14 @@ type GameInstance struct {
 type GameInstanceCached struct {
 	ID   string
 	Port int
-	Addr *caching.CachedAddr
+	Addr *net.UDPAddr
 }
 
 func (gi *GameInstance) SerializeSelf() ([]byte, error) {
 	cached := GameInstanceCached{
 		ID:   gi.id,
 		Port: gi.port,
-		Addr: caching.NewAddr(gi.Conn.Addr()),
+		Addr: gi.Conn.Addr().(*net.UDPAddr),
 	}
 
 	return json.Marshal(&cached)

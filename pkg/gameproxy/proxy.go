@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 
-	"github.com/karashiiro/kartlobby/pkg/caching"
 	"github.com/karashiiro/kartlobby/pkg/gameinstance"
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
@@ -24,15 +23,15 @@ type GameProxy struct {
 // GameProxyCached represents the data needed to reconstruct a game proxy
 // from serialized data.
 type GameProxyCached struct {
-	PlayerAddr *caching.CachedAddr
-	GameAddr   *caching.CachedAddr
+	PlayerAddr *net.UDPAddr
+	GameAddr   *net.UDPAddr
 	ProxyPort  int
 }
 
 func (p *GameProxy) SerializeSelf() ([]byte, error) {
 	o := GameProxyCached{
-		PlayerAddr: caching.NewAddr(p.PlayerConn.Addr()),
-		GameAddr:   caching.NewAddr(p.GameConn.Addr()),
+		PlayerAddr: p.PlayerConn.Addr().(*net.UDPAddr),
+		GameAddr:   p.GameConn.Addr().(*net.UDPAddr),
 		ProxyPort:  p.proxyPort,
 	}
 	return json.Marshal(&o)
@@ -83,7 +82,7 @@ func NewGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance
 		return nil, err
 	}
 
-	return &GameProxy{
+	p := &GameProxy{
 		PlayerConn: playerConn,
 		GameConn:   network.NewUDPConnection(proxy, inst.Conn.Addr()),
 
@@ -93,7 +92,12 @@ func NewGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance
 		gameAddr:  inst.Conn.Addr(),
 		proxy:     proxy,
 		proxyPort: proxyPort,
-	}, nil
+	}
+
+	// Run the proxy server
+	go p.Run()
+
+	return p, nil
 }
 
 func (p *GameProxy) Close() error {

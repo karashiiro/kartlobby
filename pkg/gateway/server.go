@@ -19,6 +19,7 @@ import (
 )
 
 type GatewayServer struct {
+	Proxies   *gameproxy.GameProxyManager
 	Instances *gameinstance.GameInstanceManager
 	Server    *net.UDPConn
 
@@ -30,10 +31,6 @@ type GatewayServer struct {
 	cache  *caching.Cache
 	gimKey string
 	pmKey  string
-
-	// Connection map from clients to servers
-	clients      map[string]*gameproxy.GameProxy
-	clientsMutex *sync.Mutex
 
 	// Callbacks for internal servers
 	internalCallbacks      map[string]func(network.Connection, *gamenet.PacketHeader, []byte)
@@ -98,6 +95,7 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 	}
 
 	gs := GatewayServer{
+		Proxies:   gameproxy.NewGameProxyManager(),
 		Instances: instanceManager,
 		Server:    server,
 
@@ -108,9 +106,6 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 
 		cache:  cache,
 		gimKey: opts.GameInstanceManagerCacheKey,
-
-		clients:      make(map[string]*gameproxy.GameProxy),
-		clientsMutex: &sync.Mutex{},
 
 		internalCallbacks:      make(map[string]func(network.Connection, *gamenet.PacketHeader, []byte)),
 		internalCallbacksMutex: &sync.Mutex{},
@@ -146,32 +141,14 @@ func (gs *GatewayServer) Run() error {
 	// Start container stop checker
 	go gs.Instances.Reaper(gs, func(addr string) {
 		// Callback when an instance is stopped
-		gs.clientsMutex.Lock()
-		defer gs.clientsMutex.Unlock()
-
-		clientsToRemove := make([]string, 0)
-
-		// Stop any connections involving the stopped instance
-		for cAddr, proxy := range gs.clients {
-			if proxy.GameConn.Addr().String() == addr {
-				err := proxy.Close()
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-
-				clientsToRemove = append(clientsToRemove, cAddr)
-			}
-		}
-
-		// Remove all connections we stopped from our proxy map
-		for _, cAddr := range clientsToRemove {
-			delete(gs.clients, cAddr)
+		err := gs.Proxies.RemoveConnectionsTo(addr)
+		if err != nil {
+			log.Println(err)
 		}
 
 		// Cache the instance manager
 		log.Println("Caching instance manager")
-		err := gs.cache.Set(gs.gimKey, gs.Instances, 365*24*time.Hour)
+		err = gs.cache.Set(gs.gimKey, gs.Instances, 365*24*time.Hour)
 		if err != nil {
 			log.Println(err)
 		}
@@ -297,8 +274,6 @@ func (gs *GatewayServer) WaitForInstanceMessage(key *gameinstance.UDPCallbackKey
 
 func (gs *GatewayServer) onInstanceStart(addr string) {
 	// Callback when an instance is started
-	gs.clientsMutex.Lock()
-	defer gs.clientsMutex.Unlock()
 
 	// Cache the instance manager
 	log.Println("Caching instance manager")
@@ -376,11 +351,10 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 		}
 	default:
 		var proxy *gameproxy.GameProxy
-		if knownProxy, ok := gs.clients[conn.Addr().String()]; ok {
+		if knownProxy, err := gs.Proxies.GetProxy(conn.Addr().String()); err == nil {
 			proxy = knownProxy
 		} else {
-			gs.clientsMutex.Lock()
-			defer gs.clientsMutex.Unlock()
+			defer gs.Proxies.LockUnlock()()
 
 			// Create a new map entry to forward this player's packets to a server.
 			//
@@ -416,17 +390,11 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			gs.broadcast.Set(playerConn)
 
 			// Start a new UDP server to proxy through
-			proxy, err = gameproxy.NewGameProxy(playerConn, inst)
+			proxy, err = gs.Proxies.CreateProxy(playerConn, inst, conn.Addr().String())
 			if err != nil {
 				log.Println(err)
 				return
 			}
-
-			// Run the proxy server
-			go proxy.Run()
-
-			// Store the proxy for future packets
-			gs.clients[conn.Addr().String()] = proxy
 		}
 
 		// Forward packet to the game
