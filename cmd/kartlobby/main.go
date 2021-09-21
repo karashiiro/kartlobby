@@ -53,6 +53,7 @@ func main() {
 		Port:                        config.GatewayPort,
 		RedisAddress:                config.RedisAddress,
 		GameInstanceManagerCacheKey: config.GIMKey,
+		ProxyManagerCacheKey:        config.PMKey,
 		MaxInstances:                config.MaxRooms,
 		Motd:                        motd,
 		DockerImage:                 config.DockerImage,

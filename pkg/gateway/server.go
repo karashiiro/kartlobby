@@ -13,6 +13,7 @@ import (
 	"github.com/karashiiro/kartlobby/pkg/caching"
 	"github.com/karashiiro/kartlobby/pkg/gameinstance"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
+	"github.com/karashiiro/kartlobby/pkg/gameproxy"
 	"github.com/karashiiro/kartlobby/pkg/motd"
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
@@ -28,9 +29,10 @@ type GatewayServer struct {
 
 	cache  *caching.Cache
 	gimKey string
+	pmKey  string
 
 	// Connection map from clients to servers
-	clients      map[string]*gameProxy
+	clients      map[string]*gameproxy.GameProxy
 	clientsMutex *sync.Mutex
 
 	// Callbacks for internal servers
@@ -48,6 +50,7 @@ type GatewayOptions struct {
 	Port                        int
 	RedisAddress                string
 	GameInstanceManagerCacheKey string
+	ProxyManagerCacheKey        string
 	MaxInstances                int
 	Motd                        string
 	DockerImage                 string
@@ -106,7 +109,7 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		cache:  cache,
 		gimKey: opts.GameInstanceManagerCacheKey,
 
-		clients:      make(map[string]*gameProxy),
+		clients:      make(map[string]*gameproxy.GameProxy),
 		clientsMutex: &sync.Mutex{},
 
 		internalCallbacks:      make(map[string]func(network.Connection, *gamenet.PacketHeader, []byte)),
@@ -150,7 +153,7 @@ func (gs *GatewayServer) Run() error {
 
 		// Stop any connections involving the stopped instance
 		for cAddr, proxy := range gs.clients {
-			if proxy.gameConn.Addr().String() == addr {
+			if proxy.GameConn.Addr().String() == addr {
 				err := proxy.Close()
 				if err != nil {
 					log.Println(err)
@@ -372,7 +375,7 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			return
 		}
 	default:
-		var proxy *gameProxy
+		var proxy *gameproxy.GameProxy
 		if knownProxy, ok := gs.clients[conn.Addr().String()]; ok {
 			proxy = knownProxy
 		} else {
@@ -413,7 +416,7 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			gs.broadcast.Set(playerConn)
 
 			// Start a new UDP server to proxy through
-			proxy, err = newGameProxy(playerConn, inst)
+			proxy, err = gameproxy.NewGameProxy(playerConn, inst)
 			if err != nil {
 				log.Println(err)
 				return

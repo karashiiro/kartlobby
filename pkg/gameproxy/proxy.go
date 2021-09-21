@@ -1,4 +1,4 @@
-package gateway
+package gameproxy
 
 import (
 	"encoding/json"
@@ -10,11 +10,12 @@ import (
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
 
-type gameProxy struct {
+type GameProxy struct {
+	PlayerConn network.Connection
+	GameConn   network.Connection
+
 	playerAddr   net.Addr
-	playerConn   network.Connection
 	gameAddr     net.Addr
-	gameConn     network.Connection
 	proxy        *net.UDPConn
 	proxyPort    int
 	proxyRunning bool
@@ -28,16 +29,16 @@ type GameProxyCached struct {
 	ProxyPort  int
 }
 
-func (p *gameProxy) SerializeSelf() ([]byte, error) {
+func (p *GameProxy) SerializeSelf() ([]byte, error) {
 	o := GameProxyCached{
-		PlayerAddr: caching.NewAddr(p.playerConn.Addr()),
-		GameAddr:   caching.NewAddr(p.gameConn.Addr()),
+		PlayerAddr: caching.NewAddr(p.PlayerConn.Addr()),
+		GameAddr:   caching.NewAddr(p.GameConn.Addr()),
 		ProxyPort:  p.proxyPort,
 	}
 	return json.Marshal(&o)
 }
 
-func (p *gameProxy) DeserializeSelf(data []byte) error {
+func (p *GameProxy) DeserializeSelf(data []byte) error {
 	o := GameProxyCached{}
 
 	err := json.Unmarshal(data, &o)
@@ -52,15 +53,15 @@ func (p *gameProxy) DeserializeSelf(data []byte) error {
 	return nil
 }
 
-func (p *gameProxy) HydrateDeserialized(gatewayServer *net.UDPConn) error {
+func (p *GameProxy) HydrateDeserialized(gatewayServer *net.UDPConn) error {
 	// Restart the UDP server on our proxy port
 	proxy, err := net.ListenUDP("udp", &net.UDPAddr{Port: p.proxyPort})
 	if err != nil {
 		return err
 	}
 
-	p.playerConn = network.NewUDPConnection(gatewayServer, p.playerAddr)
-	p.gameConn = network.NewUDPConnection(proxy, p.gameAddr)
+	p.PlayerConn = network.NewUDPConnection(gatewayServer, p.playerAddr)
+	p.GameConn = network.NewUDPConnection(proxy, p.gameAddr)
 	p.proxy = proxy
 
 	go p.Run()
@@ -68,7 +69,8 @@ func (p *gameProxy) HydrateDeserialized(gatewayServer *net.UDPConn) error {
 	return nil
 }
 
-func newGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance) (*gameProxy, error) {
+// NewGameProxy creates a new instance of a game proxy.
+func NewGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance) (*GameProxy, error) {
 	// Get a free port to proxy through
 	proxyPort, err := network.GetFreePort()
 	if err != nil {
@@ -81,24 +83,25 @@ func newGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance
 		return nil, err
 	}
 
-	return &gameProxy{
+	return &GameProxy{
+		PlayerConn: playerConn,
+		GameConn:   network.NewUDPConnection(proxy, inst.Conn.Addr()),
+
 		playerAddr: playerConn.Addr(),
-		playerConn: playerConn,
 		// Set the remote connection to one that directs messages *from* the
 		// proxy server *to* the game
 		gameAddr:  inst.Conn.Addr(),
-		gameConn:  network.NewUDPConnection(proxy, inst.Conn.Addr()),
 		proxy:     proxy,
 		proxyPort: proxyPort,
 	}, nil
 }
 
-func (p *gameProxy) Close() error {
+func (p *GameProxy) Close() error {
 	p.proxyRunning = false
 	return p.proxy.Close()
 }
 
-func (p *gameProxy) Run() {
+func (p *GameProxy) Run() {
 	if p.proxyRunning {
 		return
 	}
@@ -119,15 +122,15 @@ func (p *gameProxy) Run() {
 		}
 
 		// Forward packet to the client
-		err = p.playerConn.Send(proxyData[:n])
+		err = p.PlayerConn.Send(proxyData[:n])
 		if err != nil {
 			log.Println(err)
 		}
 	}
 }
 
-func (u *gameProxy) SendToGame(data []byte) error {
-	err := u.gameConn.Send(data)
+func (u *GameProxy) SendToGame(data []byte) error {
+	err := u.GameConn.Send(data)
 	if err != nil {
 		return err
 	}

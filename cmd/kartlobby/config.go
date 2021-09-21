@@ -8,6 +8,7 @@ type Configuration struct {
 	// The cache key used for the game instance manager, if you run
 	// multiple lobbies on the same physical server alongside Redis.
 	GIMKey string `default:"kartlobby_gameinstancemanager"`
+	PMKey  string `default:"kartlobby_proxymanager"`
 
 	Motd        string
 	MaxRooms    int    `default:"1"`
