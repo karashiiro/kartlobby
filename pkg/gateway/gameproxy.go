@@ -43,6 +43,10 @@ func (u *gameProxy) Close() error {
 }
 
 func (u *gameProxy) Run() {
+	if u.proxyRunning {
+		return
+	}
+
 	u.proxyRunning = true
 
 	var proxyData [2048]byte

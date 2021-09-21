@@ -35,15 +35,61 @@ type GameInstanceManager struct {
 	addonPath               string
 }
 
-type GameInstanceManagerCached struct{}
+// GameInstanceManagerCached represents the least information
+// needed to restore the state of a full GameInstanceManager.
+type GameInstanceManagerCached struct {
+	Instances map[string]string
+}
 
 func (m *GameInstanceManager) SerializeSelf() ([]byte, error) {
-	return json.Marshal(&GameInstanceManagerCached{})
+	cached := GameInstanceManagerCached{
+		Instances: make(map[string]string),
+	}
+
+	for addr, inst := range m.instances {
+		instSerialized, err := inst.SerializeSelf()
+		if err != nil {
+			return nil, err
+		}
+
+		cached.Instances[addr] = string(instSerialized)
+	}
+
+	return json.Marshal(&cached)
 }
 
 func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
 	o := GameInstanceManagerCached{}
-	return json.Unmarshal(data, &o)
+
+	err := json.Unmarshal(data, &o)
+	if err != nil {
+		return err
+	}
+
+	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return err
+	}
+
+	for addr, instSerialized := range o.Instances {
+		inst := &GameInstance{}
+		err := inst.DeserializeSelf([]byte(instSerialized))
+		if err != nil {
+			return err
+		}
+
+		m.instances[addr] = inst
+	}
+
+	m.client = client
+
+	return nil
+}
+
+func (m *GameInstanceManager) HydrateDeserialized(server *net.UDPConn) {
+	for _, inst := range m.instances {
+		inst.HydrateDeserialized(m.client, server)
+	}
 }
 
 // NewManager creates a new game instance manager. The maxInstances parameter controls
@@ -80,6 +126,10 @@ func NewManager(opts *GameInstanceManagerOptions) (*GameInstanceManager, error) 
 // optionally provided to run a callback when an instance is stopped. This callback
 // takes the server's address as its first argument.
 func (m *GameInstanceManager) Reaper(server UDPServer, stopFn func(string)) {
+	if m.reaperRunning {
+		return
+	}
+
 	m.reaperRunning = true
 	for m.reaperRunning {
 		instancesToRemove := make([]string, 0)

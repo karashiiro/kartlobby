@@ -3,6 +3,7 @@ package gameinstance
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"time"
@@ -13,22 +14,11 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
+	"github.com/karashiiro/kartlobby/pkg/caching"
 	"github.com/karashiiro/kartlobby/pkg/doom"
 	"github.com/karashiiro/kartlobby/pkg/gamenet"
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
-
-type UDPServer interface {
-	// WaitForMessage waits for a message with the provided opcode from the specified internal port.
-	// This function should always be called with a timeout context in order to avoid hanging.
-	WaitForInstanceMessage(key *UDPCallbackKey, result chan []byte, err chan error, ctx context.Context)
-}
-
-type UDPCallbackKey struct {
-	Context  string
-	GamePort int
-	Message  gamenet.Opcode
-}
 
 type GameInstance struct {
 	Conn network.Connection
@@ -36,6 +26,45 @@ type GameInstance struct {
 	client *client.Client
 	id     string
 	port   int
+	addr   net.Addr
+}
+
+// GameInstanceCached represents the least information
+// needed to reconstruct the state of a full GameInstance.
+type GameInstanceCached struct {
+	ID   string
+	Port int
+	Addr *caching.CachedAddr
+}
+
+func (gi *GameInstance) SerializeSelf() ([]byte, error) {
+	cached := GameInstanceCached{
+		ID:   gi.id,
+		Port: gi.port,
+		Addr: caching.NewAddr(gi.Conn.Addr()),
+	}
+
+	return json.Marshal(&cached)
+}
+
+func (gi *GameInstance) DeserializeSelf(data []byte) error {
+	o := GameInstanceCached{}
+
+	err := json.Unmarshal(data, &o)
+	if err != nil {
+		return err
+	}
+
+	gi.id = o.ID
+	gi.port = o.Port
+	gi.addr = o.Addr
+
+	return nil
+}
+
+func (gi *GameInstance) HydrateDeserialized(client *client.Client, server *net.UDPConn) {
+	gi.Conn = network.NewUDPConnection(server, gi.addr)
+	gi.client = client
 }
 
 func newInstance(client *client.Client, server *net.UDPConn, image string, configPath string, addonPath string) (*GameInstance, error) {
@@ -127,15 +156,18 @@ func newInstance(client *client.Client, server *net.UDPConn, image string, confi
 		return nil, err
 	}
 
+	addr := &net.UDPAddr{
+		IP:   *ip,
+		Port: port,
+	}
+
 	inst := &GameInstance{
-		Conn: network.NewUDPConnection(server, &net.UDPAddr{
-			IP:   *ip,
-			Port: port,
-		}),
+		Conn: network.NewUDPConnection(server, addr),
 
 		client: client,
 		id:     resp.ID,
 		port:   port,
+		addr:   addr,
 	}
 
 	return inst, nil
