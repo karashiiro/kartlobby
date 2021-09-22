@@ -101,11 +101,11 @@ func (m *GameInstanceManager) DeserializeSelf(data []byte) error {
 	return nil
 }
 
-func (m *GameInstanceManager) HydrateDeserialized(server *net.UDPConn, image, configPath, addonPath string, maxInstances int) {
-	m.maxInstances = maxInstances
-	m.image = image
-	m.configPath = configPath
-	m.addonPath = addonPath
+func (m *GameInstanceManager) HydrateDeserialized(server *net.UDPConn, opts *GameInstanceManagerOptions) {
+	m.maxInstances = opts.MaxInstances
+	m.image = opts.DockerImage
+	m.configPath = opts.GameConfigPath
+	m.addonPath = opts.GameAddonPath
 	for _, inst := range m.instances {
 		inst.HydrateDeserialized(m.client, server)
 	}

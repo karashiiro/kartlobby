@@ -91,7 +91,12 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 			return nil, err
 		}
 
-		instanceManager.HydrateDeserialized(server, opts.DockerImage, opts.GameConfigPath, opts.GameAddonPath, opts.MaxInstances)
+		instanceManager.HydrateDeserialized(server, &gameinstance.GameInstanceManagerOptions{
+			MaxInstances:   opts.MaxInstances,
+			DockerImage:    opts.DockerImage,
+			GameConfigPath: opts.GameConfigPath,
+			GameAddonPath:  opts.GameAddonPath,
+		})
 	}
 
 	// Create/get the proxy manager
