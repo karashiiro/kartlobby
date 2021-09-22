@@ -102,7 +102,7 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 	} else {
 		log.Println("Restoring proxy manager")
 		proxyManager = &gameproxy.GameProxyManager{}
-		err = cache.Get(opts.ProxyManagerCacheKey, instanceManager)
+		err = cache.Get(opts.ProxyManagerCacheKey, proxyManager)
 		if err != nil {
 			return nil, err
 		}
@@ -162,6 +162,13 @@ func (gs *GatewayServer) Run() error {
 	go gs.Instances.Reaper(gs, func(addr string) {
 		// Callback when an instance is stopped
 		err := gs.Proxies.RemoveConnectionsTo(addr)
+		if err != nil {
+			log.Println(err)
+		}
+
+		// Cache the proxy manager
+		log.Println("Caching proxy manager")
+		err = gs.cache.Set(gs.pmKey, gs.Proxies, 365*24*time.Hour)
 		if err != nil {
 			log.Println(err)
 		}
@@ -407,10 +414,17 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			gs.broadcast.Set(playerConn)
 
 			// Start a new UDP server to proxy through
-			_, err = gs.Proxies.CreateProxy(playerConn, inst, conn.Addr().String())
+			_, err = gs.Proxies.CreateProxy(playerConn, inst)
 			if err != nil {
 				log.Println(err)
 				return
+			}
+
+			// Cache the proxy manager
+			log.Println("Caching proxy manager")
+			err = gs.cache.Set(gs.pmKey, gs.Proxies, 365*24*time.Hour)
+			if err != nil {
+				log.Println(err)
 			}
 
 			// Don't send this packet in addition to waiting packets

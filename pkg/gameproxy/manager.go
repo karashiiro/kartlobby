@@ -43,6 +43,7 @@ func (m *GameProxyManager) DeserializeSelf(data []byte) error {
 		return err
 	}
 
+	m.clients = make(map[string]*GameProxy)
 	for addr, proxySerialized := range o.Clients {
 		proxy := &GameProxy{}
 		err := proxy.DeserializeSelf([]byte(proxySerialized))
@@ -85,7 +86,8 @@ func (m *GameProxyManager) GetProxy(addr string) (*GameProxy, error) {
 	return nil, errors.New("no proxy matches the provided address")
 }
 
-func (m *GameProxyManager) CreateProxy(playerConn network.Connection, inst *gameinstance.GameInstance, addr string) (*GameProxy, error) {
+// CreateProxy creates a proxy from the provided player connection to the specified instance.
+func (m *GameProxyManager) CreateProxy(playerConn network.Connection, inst *gameinstance.GameInstance) (*GameProxy, error) {
 	m.clientsMutex.Lock()
 	defer m.clientsMutex.Unlock()
 
@@ -95,11 +97,14 @@ func (m *GameProxyManager) CreateProxy(playerConn network.Connection, inst *game
 		return nil, err
 	}
 
+	addr := playerConn.Addr().String()
+
 	m.clients[addr] = p
 
 	return p, nil
 }
 
+// RemoveConnectionsTo removes all connections to the provided address.
 func (m *GameProxyManager) RemoveConnectionsTo(addr string) error {
 	m.clientsMutex.Lock()
 	defer m.clientsMutex.Unlock()
