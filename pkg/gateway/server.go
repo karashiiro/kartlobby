@@ -72,14 +72,16 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 
 	// Create/get the instance manager
 	var instanceManager *gameinstance.GameInstanceManager
+	instanceManagerOpts := &gameinstance.GameInstanceManagerOptions{
+		MaxInstances:   opts.MaxInstances,
+		DockerImage:    opts.DockerImage,
+		GameConfigPath: opts.GameConfigPath,
+		GameAddonPath:  opts.GameAddonPath,
+	}
+
 	if !cache.Has(opts.GameInstanceManagerCacheKey) {
 		log.Println("Creating instance manager")
-		instanceManager, err = gameinstance.NewManager(&gameinstance.GameInstanceManagerOptions{
-			MaxInstances:   opts.MaxInstances,
-			DockerImage:    opts.DockerImage,
-			GameConfigPath: opts.GameConfigPath,
-			GameAddonPath:  opts.GameAddonPath,
-		})
+		instanceManager, err = gameinstance.NewManager(instanceManagerOpts)
 		if err != nil {
 			return nil, err
 		}
@@ -91,12 +93,7 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 			return nil, err
 		}
 
-		instanceManager.HydrateDeserialized(server, &gameinstance.GameInstanceManagerOptions{
-			MaxInstances:   opts.MaxInstances,
-			DockerImage:    opts.DockerImage,
-			GameConfigPath: opts.GameConfigPath,
-			GameAddonPath:  opts.GameAddonPath,
-		})
+		instanceManager.HydrateDeserialized(server, instanceManagerOpts)
 	}
 
 	// Create/get the proxy manager
