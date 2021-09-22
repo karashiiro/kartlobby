@@ -125,6 +125,7 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 
 		cache:  cache,
 		gimKey: opts.GameInstanceManagerCacheKey,
+		pmKey:  opts.ProxyManagerCacheKey,
 
 		internalCallbacks:      make(map[string]func(network.Connection, *gamenet.PacketHeader, []byte)),
 		internalCallbacksMutex: &sync.Mutex{},
