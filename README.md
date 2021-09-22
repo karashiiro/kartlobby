@@ -25,7 +25,7 @@ in order to balance players across all rooms.
  - [ ] TBD
 
 ## Usage
-Run `pull_image.sh` to pull the latest Docker image. If the game ever updates, run it again to update the image to the latest version.
+Requires Redis. Run `pull_image.sh` to pull the latest Docker image. If the game ever updates, run it again to update the image to the latest version.
 
 ## Configuration
 The application comes preconfigured, but you can customize its configuration by creating a `config.yml` in the same directory as the program,
