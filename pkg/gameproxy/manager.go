@@ -1,7 +1,9 @@
 package gameproxy
 
 import (
+	"encoding/json"
 	"errors"
+	"net"
 	"sync"
 
 	"github.com/karashiiro/kartlobby/pkg/gameinstance"
@@ -12,6 +14,59 @@ type GameProxyManager struct {
 	// Connection map from clients to servers
 	clients      map[string]*GameProxy
 	clientsMutex *sync.Mutex
+}
+
+type GameProxyManagerCached struct {
+	Clients map[string]string
+}
+
+func (m *GameProxyManager) SerializeSelf() ([]byte, error) {
+	o := GameProxyManagerCached{}
+
+	o.Clients = make(map[string]string)
+	for addr, proxy := range m.clients {
+		proxySerialized, err := proxy.SerializeSelf()
+		if err != nil {
+			return nil, err
+		}
+
+		o.Clients[addr] = string(proxySerialized)
+	}
+
+	return json.Marshal(&o)
+}
+
+func (m *GameProxyManager) DeserializeSelf(data []byte) error {
+	o := GameProxyManagerCached{}
+	err := json.Unmarshal(data, &o)
+	if err != nil {
+		return err
+	}
+
+	for addr, proxySerialized := range o.Clients {
+		proxy := &GameProxy{}
+		err := proxy.DeserializeSelf([]byte(proxySerialized))
+		if err != nil {
+			return err
+		}
+
+		m.clients[addr] = proxy
+	}
+
+	m.clientsMutex = &sync.Mutex{}
+
+	return nil
+}
+
+func (m *GameProxyManager) HydrateDeserialized(gatewayServer *net.UDPConn) error {
+	for _, proxy := range m.clients {
+		err := proxy.HydrateDeserialized(gatewayServer)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // NewProxyManager returns a new game proxy manager.

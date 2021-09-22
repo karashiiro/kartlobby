@@ -94,8 +94,27 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		instanceManager.HydrateDeserialized(server, opts.DockerImage, opts.GameConfigPath, opts.GameAddonPath, opts.MaxInstances)
 	}
 
+	// Create/get the proxy manager
+	var proxyManager *gameproxy.GameProxyManager
+	if !cache.Has(opts.ProxyManagerCacheKey) {
+		log.Println("Creating proxy manager")
+		proxyManager = gameproxy.NewGameProxyManager()
+	} else {
+		log.Println("Restoring proxy manager")
+		proxyManager = &gameproxy.GameProxyManager{}
+		err = cache.Get(opts.ProxyManagerCacheKey, instanceManager)
+		if err != nil {
+			return nil, err
+		}
+
+		err = proxyManager.HydrateDeserialized(server)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	gs := GatewayServer{
-		Proxies:   gameproxy.NewGameProxyManager(),
+		Proxies:   proxyManager,
 		Instances: instanceManager,
 		Server:    server,
 
