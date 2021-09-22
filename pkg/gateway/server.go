@@ -163,7 +163,9 @@ func (gs *GatewayServer) Run() error {
 	// Start container stop checker
 	go gs.Instances.Reaper(gs, func(addr string) {
 		// Callback when an instance is stopped
-		err := gs.Proxies.RemoveConnectionsTo(addr)
+		err := gs.Proxies.RemoveConnectionsTo(addr, func(playerConn network.Connection) {
+			gs.broadcast.Unset(playerConn)
+		})
 		if err != nil {
 			log.Println(err)
 		}

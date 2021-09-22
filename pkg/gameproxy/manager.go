@@ -104,12 +104,13 @@ func (m *GameProxyManager) CreateProxy(playerConn network.Connection, inst *game
 	return p, nil
 }
 
-// RemoveConnectionsTo removes all connections to the provided address.
-func (m *GameProxyManager) RemoveConnectionsTo(addr string) error {
+// RemoveConnectionsTo removes all connections to the provided address. A callback
+// may be provided that will be called for each stopped proxy.
+func (m *GameProxyManager) RemoveConnectionsTo(addr string, cb func(network.Connection)) error {
 	m.clientsMutex.Lock()
 	defer m.clientsMutex.Unlock()
 
-	clientsToRemove := make([]string, 0)
+	clientsToRemove := make(map[string]*GameProxy)
 
 	// Stop any connections involving the stopped instance
 	for cAddr, proxy := range m.clients {
@@ -119,13 +120,14 @@ func (m *GameProxyManager) RemoveConnectionsTo(addr string) error {
 				return err
 			}
 
-			clientsToRemove = append(clientsToRemove, cAddr)
+			clientsToRemove[cAddr] = proxy
 		}
 	}
 
 	// Remove all connections we stopped from our proxy map
-	for _, cAddr := range clientsToRemove {
+	for cAddr, proxy := range clientsToRemove {
 		delete(m.clients, cAddr)
+		cb(proxy.PlayerConn)
 	}
 
 	return nil
