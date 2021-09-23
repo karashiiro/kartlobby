@@ -21,6 +21,7 @@ in order to balance players across all rooms.
  - [x] Proxy killer ([#14](https://github.com/karashiiro/kartlobby/issues/14))
  - [ ] Waiting player handling ([#7](https://github.com/karashiiro/kartlobby/issues/7))
  - [ ] Ban list syncing ([#2](https://github.com/karashiiro/kartlobby/issues/2))
+ - [ ] Profiling
  - [ ] Load testing
  - [ ] Master Server support
  - [ ] TBD
