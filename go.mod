@@ -40,3 +40,5 @@ require (
 	github.com/go-redis/redis v6.14.0+incompatible
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+require github.com/bep/debounce v1.2.0 // indirect

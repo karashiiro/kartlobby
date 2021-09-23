@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net"
+	"time"
 
+	"github.com/bep/debounce"
 	"github.com/karashiiro/kartlobby/pkg/gameinstance"
 	"github.com/karashiiro/kartlobby/pkg/network"
 )
@@ -110,10 +112,22 @@ func (p *GameProxy) Run() {
 		return
 	}
 
+	// Timeout setup
+	debounced := debounce.New(5 * time.Second)
+	onDebounce := func() {
+		err := p.Close()
+		if err != nil {
+			log.Println("debounce:", err)
+		}
+	}
+
 	p.proxyRunning = true
 
 	var proxyData [2048]byte
 	for p.proxyRunning {
+		// Call the timeout debouncer
+		debounced(onDebounce)
+
 		// Read packet from the game
 		n, _, err := p.proxy.ReadFrom(proxyData[:])
 		if err != nil {
