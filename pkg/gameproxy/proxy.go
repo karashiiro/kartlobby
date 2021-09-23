@@ -54,7 +54,7 @@ func (p *GameProxy) DeserializeSelf(data []byte) error {
 	return nil
 }
 
-func (p *GameProxy) HydrateDeserialized(gatewayServer *net.UDPConn) error {
+func (p *GameProxy) HydrateDeserialized(gatewayServer *net.UDPConn, onClose func(string)) error {
 	// Restart the UDP server on our proxy port
 	proxy, err := net.ListenUDP("udp", &net.UDPAddr{Port: p.proxyPort})
 	if err != nil {
@@ -65,13 +65,13 @@ func (p *GameProxy) HydrateDeserialized(gatewayServer *net.UDPConn) error {
 	p.GameConn = network.NewUDPConnection(proxy, p.gameAddr)
 	p.proxy = proxy
 
-	go p.Run()
+	go p.Run(onClose)
 
 	return nil
 }
 
 // NewGameProxy creates a new instance of a game proxy.
-func NewGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance) (*GameProxy, error) {
+func NewGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance, onClose func(string)) (*GameProxy, error) {
 	// Get a free port to proxy through
 	proxyPort, err := network.GetFreePort()
 	if err != nil {
@@ -97,7 +97,7 @@ func NewGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance
 	}
 
 	// Run the proxy server
-	go p.Run()
+	go p.Run(onClose)
 
 	return p, nil
 }
@@ -107,7 +107,7 @@ func (p *GameProxy) Close() error {
 	return p.proxy.Close()
 }
 
-func (p *GameProxy) Run() {
+func (p *GameProxy) Run(onClose func(string)) {
 	if p.proxyRunning {
 		return
 	}
@@ -119,6 +119,8 @@ func (p *GameProxy) Run() {
 		if err != nil {
 			log.Println("debounce:", err)
 		}
+
+		onClose(p.playerAddr.String())
 	}
 
 	p.proxyRunning = true

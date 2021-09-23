@@ -3,6 +3,7 @@ package gameproxy
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"sync"
 
@@ -61,7 +62,7 @@ func (m *GameProxyManager) DeserializeSelf(data []byte) error {
 
 func (m *GameProxyManager) HydrateDeserialized(gatewayServer *net.UDPConn) error {
 	for _, proxy := range m.clients {
-		err := proxy.HydrateDeserialized(gatewayServer)
+		err := proxy.HydrateDeserialized(gatewayServer, m.onProxyDie)
 		if err != nil {
 			return err
 		}
@@ -92,7 +93,7 @@ func (m *GameProxyManager) CreateProxy(playerConn network.Connection, inst *game
 	defer m.clientsMutex.Unlock()
 
 	// Start a new UDP server to proxy through
-	p, err := NewGameProxy(playerConn, inst)
+	p, err := NewGameProxy(playerConn, inst, m.onProxyDie)
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +103,13 @@ func (m *GameProxyManager) CreateProxy(playerConn network.Connection, inst *game
 	m.clients[addr] = p
 
 	return p, nil
+}
+
+func (m *GameProxyManager) onProxyDie(addr string) {
+	m.clientsMutex.Lock()
+	defer m.clientsMutex.Unlock()
+	delete(m.clients, addr)
+	log.Printf("Proxy %s removed", addr)
 }
 
 // RemoveConnectionsTo removes all connections to the provided address. A callback
