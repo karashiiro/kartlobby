@@ -54,6 +54,10 @@ func (p *GameProxy) DeserializeSelf(data []byte) error {
 	return nil
 }
 
+// HydrateDeserialized hyhdrates and starts an instance of a game proxy.
+// The onClose callback should be used to perform any cleanup that would be
+// done after a Close() call by the caller, and it must be provided. Its
+// first argument is the player's address.
 func (p *GameProxy) HydrateDeserialized(gatewayServer *net.UDPConn, onClose func(string)) error {
 	// Restart the UDP server on our proxy port
 	proxy, err := net.ListenUDP("udp", &net.UDPAddr{Port: p.proxyPort})
@@ -65,12 +69,15 @@ func (p *GameProxy) HydrateDeserialized(gatewayServer *net.UDPConn, onClose func
 	p.GameConn = network.NewUDPConnection(proxy, p.gameAddr)
 	p.proxy = proxy
 
-	go p.Run(onClose)
+	go p.run(onClose)
 
 	return nil
 }
 
-// NewGameProxy creates a new instance of a game proxy.
+// NewGameProxy creates and starts a new instance of a game proxy. The onClose
+// callback should be used to perform any cleanup that would be done after a
+// Close() call by the caller, and it must be provided. Its first argument is
+// the player's address.
 func NewGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance, onClose func(string)) (*GameProxy, error) {
 	// Get a free port to proxy through
 	proxyPort, err := network.GetFreePort()
@@ -97,7 +104,7 @@ func NewGameProxy(playerConn network.Connection, inst *gameinstance.GameInstance
 	}
 
 	// Run the proxy server
-	go p.Run(onClose)
+	go p.run(onClose)
 
 	return p, nil
 }
@@ -107,7 +114,11 @@ func (p *GameProxy) Close() error {
 	return p.proxy.Close()
 }
 
-func (p *GameProxy) Run(onClose func(string)) {
+// Run runs the proxy, listening for packets from the game and forwarding them
+// to the player. The callback, which takes the player address as its argument,
+// must be provided. Any cleanup that an owner of the proxy would normally do
+// should be done in the callback.
+func (p *GameProxy) run(onClose func(string)) {
 	if p.proxyRunning {
 		return
 	}
