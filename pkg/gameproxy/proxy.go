@@ -124,7 +124,7 @@ func (p *GameProxy) run(onClose func(string)) {
 	}
 
 	// Timeout setup
-	debounced := debounce.New(5 * time.Second)
+	debounced := debounce.New(2 * time.Minute)
 	onDebounce := func() {
 		err := p.Close()
 		if err != nil {
