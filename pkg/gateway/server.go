@@ -28,6 +28,8 @@ type GatewayServer struct {
 	broadcast    *network.BroadcastConnection
 	motd         motd.Motd
 
+	queue *playerQueue
+
 	cache  *caching.Cache
 	gimKey string
 	pmKey  string
@@ -124,6 +126,8 @@ func NewServer(opts *GatewayOptions) (*GatewayServer, error) {
 		maxInstances: opts.MaxInstances,
 		broadcast:    broadcast,
 		motd:         motd.New(opts.Motd),
+
+		queue: newPlayerQueue(300),
 
 		cache:  cache,
 		gimKey: opts.GameInstanceManagerCacheKey,
