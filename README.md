@@ -24,6 +24,7 @@ in order to balance players across all rooms.
  - [ ] Profiling
  - [ ] Load testing
  - [ ] Master Server support
+ - [ ] Docker image ([#15](https://github.com/karashiiro/kartlobby/issues/15))
  - [ ] TBD
 
 ## Usage
