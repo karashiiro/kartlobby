@@ -57,6 +57,10 @@ func (b *BroadcastConnection) Set(conn Connection) error {
 func (b *BroadcastConnection) Unset(conn Connection) {
 	connIdx := -1
 	for i := 0; i < len(b.conns); i++ {
+		if b.conns[i] == nil {
+			b.removeAt(i)
+		}
+
 		if b.conns[i].Addr().String() == conn.Addr().String() {
 			connIdx = i
 		}
@@ -66,6 +70,10 @@ func (b *BroadcastConnection) Unset(conn Connection) {
 		return
 	}
 
+	b.removeAt(connIdx)
+}
+
+func (b *BroadcastConnection) removeAt(connIdx int) {
 	b.setMutex.Lock()
 	defer b.setMutex.Unlock()
 	b.conns[connIdx] = b.conns[b.numConns-1]
