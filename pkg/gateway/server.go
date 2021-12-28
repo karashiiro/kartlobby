@@ -398,6 +398,7 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 			var clientAddr net.Addr = addr // The sender's address, renamed here for clarity.
 
 			// Check if we're already waiting to join, take a lock otherwise
+			// in order to avoid a stampede
 			defer gs.instanceJoinWaitTable.LockUnlock()()
 			if gs.instanceJoinWaitTable.IsSet(clientAddr.String()) {
 				return
