@@ -17,3 +17,6 @@
 # Configuration
 *.yml
 *.yaml
+
+# Docker volume folders
+volumes/
