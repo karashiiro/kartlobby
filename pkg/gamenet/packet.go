@@ -40,8 +40,8 @@ func SendPacket(conn network.Connection, data interface{}) error {
 
 func netBufferChecksum(buf []byte) uint32 {
 	checksum := uint32(0x1234567)
-	length := len(buf)
-	for i := 0; i < length; i++ {
+	length := len(buf) - 4
+	for i := 4; i < length; i++ {
 		checksum += uint32(buf[i]) * uint32(i+1)
 	}
 	return checksum
