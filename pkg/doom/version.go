@@ -1,7 +1,7 @@
 package doom
 
 const VERSION = 1
-const SUBVERSION = 3
+const SUBVERSION = 5
 
 var application = "SRB2Kart"
 
