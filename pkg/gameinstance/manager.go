@@ -249,7 +249,7 @@ func (m *GameInstanceManager) CreateInstance(conn *net.UDPConn, startFn func(str
 	// Register the instance
 	m.instances[newInstance.Conn.Addr().String()] = newInstance
 
-	log.Printf("Created new instance %s on port %d", newInstance.id, newInstance.port)
+	log.Printf("Created new instance %s on port %d from image %s", newInstance.id, newInstance.port, m.image)
 	m.numInstances++
 
 	// Run the callback, if it's provided
