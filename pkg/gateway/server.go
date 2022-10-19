@@ -213,7 +213,7 @@ func (gs *GatewayServer) Run() error {
 			header := gamenet.PacketHeader{}
 			err := gamenet.ReadPacket(data, &header)
 			if err != nil {
-				log.Println(udpAddr.String(), err)
+				log.Println(header.PacketType, udpAddr.String(), err)
 				continue
 			}
 
@@ -324,7 +324,7 @@ func (gs *GatewayServer) handlePacket(conn network.Connection, addr net.Addr, he
 		askInfo := gamenet.AskInfoPak{}
 		err := gamenet.ReadPacket(data, &askInfo)
 		if err != nil {
-			log.Println(addr.String(), err)
+			log.Println(header.PacketType, addr.String(), err)
 			return
 		}
 
