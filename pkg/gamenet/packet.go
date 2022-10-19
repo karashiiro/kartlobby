@@ -27,7 +27,7 @@ func SendPacket(conn network.Connection, data interface{}) error {
 	}
 
 	sendBuf := buf.Bytes()
-	checksum := netBufferChecksum(sendBuf[4:])
+	checksum := netBufferChecksum(sendBuf)
 	binary.LittleEndian.PutUint32(sendBuf[0:4], checksum)
 
 	err = conn.Send(sendBuf)
@@ -42,7 +42,7 @@ func netBufferChecksum(buf []byte) uint32 {
 	checksum := uint32(0x1234567)
 	length := len(buf) - 4
 	for i := 0; i < length; i++ {
-		checksum += uint32(buf[i]) * uint32(i+1)
+		checksum += uint32(buf[4:][i]) * uint32(i+1)
 	}
 	return checksum
 }
