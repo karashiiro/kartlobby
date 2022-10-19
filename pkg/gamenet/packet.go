@@ -12,7 +12,7 @@ func ReadPacket(data []byte, s interface{}) error {
 	buf := bytes.NewReader(data)
 	binary.Read(buf, binary.LittleEndian, s)
 
-	if header, ok := s.(*PacketHeader); ok && header.Checksum != netBufferChecksum(data[4:]) {
+	if header, ok := s.(*PacketHeader); ok && header.Checksum != netBufferChecksum(data) {
 		return errors.New("checksum mismatch")
 	}
 
